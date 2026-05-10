@@ -1,1 +1,1 @@
-# selection_voyage
+web: gunicorn app:app

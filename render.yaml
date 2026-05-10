@@ -1,0 +1,65 @@
+# TripVote ✈️
+
+Application web collaborative pour planifier un weekend en groupe.
+
+## Fonctionnalités
+
+- **Admin** : crée le trip, ajoute des participants et des propositions (avec galerie, prix, pros/cons, carte)
+- **Participants** : se connectent sans compte, votent (like) sur les propositions
+- **Carte interactive** : Leaflet.js + OpenStreetMap avec marqueurs personnalisés
+- **Résultats en temps réel** : polling automatique toutes les 5 secondes
+
+## Lancer en local
+
+```bash
+cd tripvote
+pip install -r requirements.txt
+python app.py
+```
+
+L'app est accessible sur http://localhost:5000
+
+Mot de passe admin par défaut : `admin123`
+
+## Déployer sur Render (gratuit)
+
+1. Créez un repo GitHub et pushez le code
+2. Allez sur [render.com](https://render.com) → New → Web Service
+3. Connectez votre repo GitHub
+4. Render détecte automatiquement `render.yaml`
+5. Dans **Environment Variables**, définissez :
+   - `ADMIN_PASSWORD` : votre mot de passe admin
+   - `SECRET_KEY` : une clé secrète longue (Render peut la générer)
+6. Cliquez sur **Deploy**
+
+> ⚠️ Le plan gratuit de Render dort après inactivité. Le premier chargement peut prendre ~30s.
+
+## Variables d'environnement
+
+| Variable | Description | Défaut |
+|---|---|---|
+| `SECRET_KEY` | Clé secrète Flask | `tripvote-secret-key-change-in-prod` |
+| `ADMIN_PASSWORD` | Mot de passe admin | `admin123` |
+| `DATABASE_URL` | URL SQLite | `sqlite:///tripvote.db` |
+
+## Structure
+
+```
+tripvote/
+├── app.py              # Flask app, routes, modèles
+├── requirements.txt
+├── Procfile            # Pour Render/Heroku
+├── render.yaml         # Config Render
+└── templates/
+    ├── base.html       # Layout commun
+    ├── index.html      # Page d'accueil / choix participant
+    ├── trip.html       # Vue principale (vote + carte + résultats)
+    ├── admin.html      # Dashboard admin
+    └── admin_login.html
+```
+
+## Workflow
+
+1. **Admin** → `/admin/login` → crée le trip → ajoute participants → ajoute propositions
+2. **Participants** → `/` → choisissent leur pseudo → votent sur `/trip`
+3. Tout le monde voit les résultats en temps réel sur l'onglet "Résultats"
