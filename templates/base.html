@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}TripVote{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg: #0D0F14;
+      --surface: #161920;
+      --surface2: #1E2230;
+      --border: #2A2F42;
+      --text: #E8EAF0;
+      --muted: #7880A0;
+      --accent: #6EE7B7;
+      --accent2: #818CF8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    h1, h2, h3, .font-display { font-family: 'Syne', sans-serif; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .card-hover {
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card-hover:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0D0F14;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 10px 22px;
+      transition: opacity 0.2s, transform 0.1s;
+      display: inline-block;
+    }
+    .btn-primary:hover { opacity: 0.85; transform: scale(0.98); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 22px;
+      transition: border-color 0.2s;
+      display: inline-block;
+    }
+    .btn-ghost:hover { border-color: var(--accent); }
+
+    .input-field {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      width: 100%;
+      outline: none;
+      font-family: 'DM Sans', sans-serif;
+      transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: var(--accent); }
+    .input-field::placeholder { color: var(--muted); }
+
+    .like-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 50px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .like-btn:hover { border-color: #EF4444; color: #EF4444; }
+    .like-btn.liked { border-color: #EF4444; color: #EF4444; background: rgba(239,68,68,0.1); }
+    .like-btn .heart { font-size: 1.1rem; transition: transform 0.15s; }
+    .like-btn:active .heart { transform: scale(1.3); }
+
+    .voter-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      font-size: 0.85rem;
+    }
+
+    .nav-link { color: var(--muted); transition: color 0.2s; }
+    .nav-link:hover { color: var(--text); }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 50px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: 'Syne', sans-serif;
+    }
+    .tag-pro { background: rgba(110,231,183,0.12); color: var(--accent); }
+    .tag-con { background: rgba(239,68,68,0.10); color: #F87171; }
+
+    /* Image gallery */
+    .gallery { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .gallery img { height: 120px; min-width: 160px; object-fit: cover; border-radius: 8px; }
+    .gallery::-webkit-scrollbar { height: 4px; }
+
+    /* Map */
+    #map { height: 400px; border-radius: 12px; border: 1px solid var(--border); }
+    .leaflet-container { background: #161920 !important; }
+
+    /* Animate */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.4s ease both; }
+
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    .pop { animation: pop 0.25s ease; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- NAV -->
+<nav style="border-bottom:1px solid var(--border); background: rgba(13,15,20,0.85); backdrop-filter: blur(12px);" class="sticky top-0 z-50">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--accent);">Trip</span>
+      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--text);">Vote</span>
+      <span style="font-size:1.1rem;">✈️</span>
+    </a>
+    <div class="flex items-center gap-4">
+      {% if is_admin %}
+        <span class="tag" style="background:rgba(129,140,248,0.15);color:var(--accent2);">⚡ Admin</span>
+        <a href="/admin" class="nav-link text-sm">Dashboard</a>
+      {% elif participant %}
+        <span class="tag tag-pro">{{ participant.emoji }} {{ participant.name }}</span>
+      {% endif %}
+      {% if is_admin or participant %}
+        <a href="/logout" class="nav-link text-sm">Déconnexion</a>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+  {% block content %}{% endblock %}
+</main>
+
+<footer style="border-top:1px solid var(--border); margin-top:60px;">
+  <div class="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between" style="color:var(--muted); font-size:0.8rem;">
+    <span>TripVote ✈️ — Planifiez ensemble</span>
+    {% if not is_admin %}
+      <a href="/admin/login" style="color:var(--border); transition:color 0.2s;" onmouseover="this.style.color='var(--muted)'" onmouseout="this.style.color='var(--border)'">Admin</a>
+    {% endif %}
+  </div>
+</footer>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>
