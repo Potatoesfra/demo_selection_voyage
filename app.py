@@ -234,6 +234,21 @@ def delete_participant(pid):
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/participant/edit/<int:pid>', methods=['POST'])
+def edit_participant(pid):
+    if not is_admin(): return redirect(url_for('admin_login'))
+    p = Participant.query.get_or_404(pid)
+    name = request.form.get('name', '').strip()
+    emoji = request.form.get('emoji', '👤').strip()
+    if name:
+        existing = Participant.query.filter_by(name=name).first()
+        if not existing or existing.id == pid:
+            p.name = name
+    if emoji:
+        p.emoji = emoji
+    db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
 
 # ─── Routes: Admin Proposals ──────────────────────────────────────────────────
 
@@ -278,6 +293,33 @@ def delete_proposal(pid):
     if not is_admin(): return redirect(url_for('admin_login'))
     p = Proposal.query.get_or_404(pid)
     db.session.delete(p)
+    db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/proposal/edit/<int:pid>', methods=['POST'])
+def edit_proposal(pid):
+    if not is_admin(): return redirect(url_for('admin_login'))
+    p = Proposal.query.get_or_404(pid)
+
+    pros_list = [x.strip() for x in request.form.get('pros','').split('\n') if x.strip()]
+    cons_list = [x.strip() for x in request.form.get('cons','').split('\n') if x.strip()]
+    images_list = [x.strip() for x in request.form.get('images','').split('\n') if x.strip()]
+    lat = request.form.get('latitude') or None
+    lng = request.form.get('longitude') or None
+
+    p.title = request.form.get('title', p.title)
+    p.description = request.form.get('description', '')
+    p.price_per_person = float(request.form['price']) if request.form.get('price') else None
+    p.pros = json.dumps(pros_list)
+    p.cons = json.dumps(cons_list)
+    p.images = json.dumps(images_list)
+    p.address = request.form.get('address', '')
+    p.latitude = float(lat) if lat else None
+    p.longitude = float(lng) if lng else None
+    p.source_url = request.form.get('source_url', '')
+    p.color = request.form.get('color', p.color)
+    p.icon = request.form.get('icon', p.icon)
+
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
