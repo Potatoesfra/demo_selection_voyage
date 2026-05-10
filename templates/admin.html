@@ -177,8 +177,10 @@
       <div class="admin-section">
         <p class="section-title">📋 Propositions existantes ({{ proposals|length }})</p>
         {% for prop in proposals %}
-        <div class="proposal-mini" style="border-left:4px solid {{ prop.color }};">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div class="proposal-mini" style="border-left:4px solid {{ prop.color }};" id="prop-block-{{ prop.id }}">
+
+          <!-- Vue résumée -->
+          <div style="display:flex; align-items:center; justify-content:space-between;" id="prop-summary-{{ prop.id }}">
             <div style="display:flex; align-items:center; gap:10px;">
               <span style="font-size:1.1rem;">{{ prop.icon }}</span>
               <div>
@@ -186,8 +188,97 @@
                 <div style="color:var(--muted); font-size:0.8rem;">{{ prop.vote_count() }} vote(s) · {% if prop.price_per_person %}{{ "%.0f"|format(prop.price_per_person) }}€/pers.{% else %}Prix non renseigné{% endif %}</div>
               </div>
             </div>
-            <form action="/admin/proposal/delete/{{ prop.id }}" method="POST" onsubmit="return confirm('Supprimer cette proposition ?')">
-              <button type="submit" style="color:#F87171; background:none; border:none; cursor:pointer; font-size:0.8rem; font-family:'Syne',sans-serif;">Supprimer</button>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button type="button" onclick="toggleEditProposal({{ prop.id }})"
+                style="color:var(--accent); background:none; border:none; cursor:pointer; font-size:0.8rem; font-family:'Syne',sans-serif; font-weight:600;">
+                ✏️ Modifier
+              </button>
+              <form action="/admin/proposal/delete/{{ prop.id }}" method="POST" onsubmit="return confirm('Supprimer cette proposition ?')">
+                <button type="submit" style="color:#F87171; background:none; border:none; cursor:pointer; font-size:0.8rem; font-family:'Syne',sans-serif;">Supprimer</button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Formulaire d'édition (caché par défaut) -->
+          <div id="prop-edit-{{ prop.id }}" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <form action="/admin/proposal/edit/{{ prop.id }}" method="POST">
+              <div class="grid-2" style="margin-bottom:12px;">
+                <div>
+                  <label class="field-label">Titre *</label>
+                  <input name="title" class="input-field" value="{{ prop.title }}" required>
+                </div>
+                <div>
+                  <label class="field-label">Prix par personne (€)</label>
+                  <input name="price" type="number" step="0.01" class="input-field" value="{{ prop.price_per_person or '' }}">
+                </div>
+              </div>
+              <div style="margin-bottom:12px;">
+                <label class="field-label">Description</label>
+                <textarea name="description" class="input-field" rows="2">{{ prop.description or '' }}</textarea>
+              </div>
+              <div class="grid-2" style="margin-bottom:12px;">
+                <div>
+                  <label class="field-label">Avantages (un par ligne)</label>
+                  <textarea name="pros" class="input-field" rows="3">{{ prop.get_pros()|join('\n') }}</textarea>
+                </div>
+                <div>
+                  <label class="field-label">Inconvénients (un par ligne)</label>
+                  <textarea name="cons" class="input-field" rows="3">{{ prop.get_cons()|join('\n') }}</textarea>
+                </div>
+              </div>
+              <div style="margin-bottom:12px;">
+                <label class="field-label">Images (URLs, une par ligne)</label>
+                <textarea name="images" class="input-field" rows="2">{{ prop.get_images()|join('\n') }}</textarea>
+              </div>
+              <div style="margin-bottom:12px;">
+                <label class="field-label">Adresse</label>
+                <div style="display:flex; gap:8px;">
+                  <input name="address" id="edit-address-{{ prop.id }}" class="input-field" value="{{ prop.address or '' }}">
+                  <button type="button" onclick="geocodeEdit({{ prop.id }})" class="btn-ghost" style="white-space:nowrap; flex-shrink:0; font-size:0.82rem;">📍 Géocoder</button>
+                </div>
+              </div>
+              <div class="grid-2" style="margin-bottom:12px;">
+                <div>
+                  <label class="field-label">Latitude</label>
+                  <input name="latitude" id="edit-lat-{{ prop.id }}" class="input-field" value="{{ prop.latitude or '' }}">
+                </div>
+                <div>
+                  <label class="field-label">Longitude</label>
+                  <input name="longitude" id="edit-lng-{{ prop.id }}" class="input-field" value="{{ prop.longitude or '' }}">
+                </div>
+              </div>
+              <div style="margin-bottom:14px;">
+                <label class="field-label">Lien source</label>
+                <input name="source_url" class="input-field" value="{{ prop.source_url or '' }}">
+              </div>
+              <!-- Color & Icon -->
+              <div class="grid-2" style="margin-bottom:16px;">
+                <div>
+                  <label class="field-label">Couleur</label>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                    {% for color in colors %}
+                    <div class="color-swatch edit-swatch-{{ prop.id }} {% if color == prop.color %}selected{% endif %}"
+                         style="background:{{ color }};" data-color="{{ color }}"
+                         onclick="selectEditColor({{ prop.id }}, '{{ color }}', this)"></div>
+                    {% endfor %}
+                  </div>
+                  <input type="hidden" name="color" id="edit-color-{{ prop.id }}" value="{{ prop.color }}">
+                </div>
+                <div>
+                  <label class="field-label">Icône</label>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                    {% for icon in icons %}
+                    <button type="button" class="icon-btn edit-icon-{{ prop.id }} {% if icon == prop.icon %}selected{% endif %}"
+                            onclick="selectEditIcon({{ prop.id }}, '{{ icon }}', this)">{{ icon }}</button>
+                    {% endfor %}
+                  </div>
+                  <input type="hidden" name="icon" id="edit-icon-{{ prop.id }}" value="{{ prop.icon }}">
+                </div>
+              </div>
+              <div style="display:flex; gap:10px;">
+                <button type="submit" class="btn-primary" style="font-size:0.85rem; padding:8px 18px;">Enregistrer ✓</button>
+                <button type="button" onclick="toggleEditProposal({{ prop.id }})" class="btn-ghost" style="font-size:0.85rem; padding:8px 18px;">Annuler</button>
+              </div>
             </form>
           </div>
         </div>
@@ -220,13 +311,37 @@
           {% if participants %}
           <div style="display:flex; flex-direction:column; gap:8px;">
             {% for p in participants %}
-            <div class="participant-chip">
-              <span style="font-size:1.2rem;">{{ p.emoji }}</span>
-              <span style="flex:1; font-family:'Syne',sans-serif; font-weight:600;">{{ p.name }}</span>
-              <span style="color:var(--muted); font-size:0.75rem;">{{ p.votes|length }} vote(s)</span>
-              <form action="/admin/participant/delete/{{ p.id }}" method="POST" onsubmit="return confirm('Supprimer {{ p.name }} ?')">
-                <button type="submit" style="color:#F87171; background:none; border:none; cursor:pointer; font-size:0.8rem;">✕</button>
-              </form>
+            <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden;">
+              <!-- Ligne résumée -->
+              <div class="participant-chip" style="border:none; border-radius:0;">
+                <span style="font-size:1.2rem;">{{ p.emoji }}</span>
+                <span style="flex:1; font-family:'Syne',sans-serif; font-weight:600;">{{ p.name }}</span>
+                <span style="color:var(--muted); font-size:0.75rem;">{{ p.votes|length }} vote(s)</span>
+                <button type="button" onclick="toggleEditParticipant({{ p.id }})"
+                  style="color:var(--accent); background:none; border:none; cursor:pointer; font-size:0.75rem; font-family:'Syne',sans-serif; font-weight:600; padding:0 4px;">
+                  ✏️
+                </button>
+                <form action="/admin/participant/delete/{{ p.id }}" method="POST" onsubmit="return confirm('Supprimer {{ p.name }} ?')">
+                  <button type="submit" style="color:#F87171; background:none; border:none; cursor:pointer; font-size:0.8rem;">✕</button>
+                </form>
+              </div>
+              <!-- Formulaire d'édition inline -->
+              <div id="pedit-{{ p.id }}" style="display:none; padding:12px; background:var(--surface2); border-top:1px solid var(--border);">
+                <form action="/admin/participant/edit/{{ p.id }}" method="POST">
+                  <div style="display:flex; gap:8px; align-items:flex-end;">
+                    <div style="flex:1;">
+                      <label class="field-label">Nom</label>
+                      <input name="name" class="input-field" value="{{ p.name }}" required style="padding:7px 10px;">
+                    </div>
+                    <div style="width:80px;">
+                      <label class="field-label">Emoji</label>
+                      <input name="emoji" class="input-field" value="{{ p.emoji }}" maxlength="4" style="padding:7px 10px; text-align:center;">
+                    </div>
+                    <button type="submit" class="btn-primary" style="padding:7px 14px; font-size:0.82rem; white-space:nowrap;">✓ OK</button>
+                    <button type="button" onclick="toggleEditParticipant({{ p.id }})" class="btn-ghost" style="padding:7px 12px; font-size:0.82rem;">✕</button>
+                  </div>
+                </form>
+              </div>
             </div>
             {% endfor %}
           </div>
@@ -255,15 +370,37 @@
 {% block extra_scripts %}
 <script>
 function selectColor(color, el) {
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+  document.querySelectorAll('.color-swatch:not([class*="edit-swatch"])').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('color-input').value = color;
 }
 
 function selectIcon(icon, el) {
-  document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('#icon-btns .icon-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('icon-input').value = icon;
+}
+
+function selectEditColor(propId, color, el) {
+  document.querySelectorAll('.edit-swatch-' + propId).forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('edit-color-' + propId).value = color;
+}
+
+function selectEditIcon(propId, icon, el) {
+  document.querySelectorAll('.edit-icon-' + propId).forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('edit-icon-' + propId).value = icon;
+}
+
+function toggleEditProposal(id) {
+  const el = document.getElementById('prop-edit-' + id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function toggleEditParticipant(id) {
+  const el = document.getElementById('pedit-' + id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 async function geocodeAddress() {
@@ -276,6 +413,19 @@ async function geocodeAddress() {
     document.getElementById('lng-input').value = data.lng.toFixed(6);
   } else {
     alert('Adresse non trouvée. Entrez les coordonnées manuellement.');
+  }
+}
+
+async function geocodeEdit(propId) {
+  const addr = document.getElementById('edit-address-' + propId).value;
+  if (!addr) return;
+  const res = await fetch('/api/geocode?address=' + encodeURIComponent(addr));
+  if (res.ok) {
+    const data = await res.json();
+    document.getElementById('edit-lat-' + propId).value = data.lat.toFixed(6);
+    document.getElementById('edit-lng-' + propId).value = data.lng.toFixed(6);
+  } else {
+    alert('Adresse non trouvée.');
   }
 }
 </script>
