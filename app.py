@@ -5,11 +5,11 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'tripvote-secret-key-change-in-prod')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///tripvote.db')
+app.secret_key = os.environ.get('SECRET_KEY')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 
 db = SQLAlchemy(app)
 
