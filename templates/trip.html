@@ -55,7 +55,10 @@
       {% if images %}
       <div class="gallery" style="padding:12px 12px 0;">
         {% for img in images %}
-        <img src="{{ img }}" alt="photo" onerror="this.style.display='none'">
+        <img src="{{ img }}" alt="photo"
+             onclick="openLightbox('{{ img }}')"
+             style="cursor:zoom-in;"
+             onerror="this.style.display='none'">
         {% endfor %}
       </div>
       {% endif %}
@@ -119,7 +122,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
           <div id="voters-{{ prop.id }}" style="display:flex; gap:4px; flex-wrap:wrap;">
             {% for pid in votes_map[prop.id] %}
-              {% set voter = participants | selectattr('id', 'eq', pid) | first %}
+              {% set voter = participants_by_id.get(pid) %}
               {% if voter %}
                 <span class="voter-badge" title="{{ voter.name }}">{{ voter.emoji }}</span>
               {% endif %}
@@ -187,7 +190,7 @@
         </div>
         <div style="margin-top:6px; display:flex; gap:4px;">
           {% for pid in votes_map[prop.id] %}
-            {% set voter = participants | selectattr('id', 'eq', pid) | first %}
+            {% set voter = participants_by_id.get(pid) %}
             {% if voter %}
               <span class="voter-badge" title="{{ voter.name }}">{{ voter.emoji }}</span>
             {% endif %}
@@ -212,10 +215,43 @@
   </div>
 </div>
 
+<!-- ═══ LIGHTBOX ═══ -->
+<div id="lightbox" onclick="closeLightbox()" style="
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,0.92); backdrop-filter:blur(8px);
+  align-items:center; justify-content:center; cursor:zoom-out;
+">
+  <button onclick="event.stopPropagation(); closeLightbox()" style="
+    position:absolute; top:20px; right:24px;
+    background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
+    color:white; font-size:1.4rem; cursor:pointer; line-height:1;
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  ">✕</button>
+  <img id="lightbox-img" src="" onclick="event.stopPropagation()" style="
+    max-width:92vw; max-height:88vh;
+    border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    object-fit:contain; transition: opacity 0.2s;
+  ">
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(src) {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  img.src = src;
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(name, btn) {
   ['proposals','results','map'].forEach(t => {
