@@ -135,19 +135,25 @@ def trip_view():
     proposals = Proposal.query.filter_by(trip_id=trip.id).order_by(Proposal.created_at).all()
     participants = Participant.query.all()
 
-    # votes dict: proposal_id -> set of participant_ids
+    # votes dict: proposal_id -> list of participant_ids
     votes_map = {}
     for prop in proposals:
         votes_map[prop.id] = [v.participant_id for v in prop.votes]
 
+    # build participant lookup dict for the template
+    participants_by_id = {p.id: p for p in participants}
+
     my_votes = set()
     if participant:
-        my_votes = {v.proposal_id for v in Vote.query.filter_by(participant_id=participant.id).all()}
+        # only keep votes for proposals that still exist
+        existing_ids = {p.id for p in proposals}
+        my_votes = {v.proposal_id for v in Vote.query.filter_by(participant_id=participant.id).all()
+                    if v.proposal_id in existing_ids}
 
     return render_template('trip.html', trip=trip, proposals=proposals,
                            participants=participants, participant=participant,
                            is_admin=is_admin(), votes_map=votes_map,
-                           my_votes=my_votes)
+                           my_votes=my_votes, participants_by_id=participants_by_id)
 
 
 # ─── Routes: Voting ───────────────────────────────────────────────────────────
