@@ -1,15 +1,3 @@
-services:
-  - type: web
-    name: tripvote
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-    envVars:
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ADMIN_PASSWORD
-        sync: false  # set manually in Render dashboard
-    disk:
-      name: sqlite-data
-      mountPath: /instance
-      sizeGB: 1
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+gunicorn==22.0.0
