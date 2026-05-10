@@ -112,7 +112,7 @@
 
         <!-- Vote bar -->
         {% set total_voters = participants|length %}
-        {% set vote_count = prop.vote_count() %}
+        {% set vote_count = vote_counts[prop.id] %}
         {% set pct = (vote_count / total_voters * 100)|int if total_voters > 0 else 0 %}
         <div class="vote-bar" style="margin-bottom:10px;">
           <div class="vote-bar-fill" style="width:{{ pct }}%; background:{{ prop.color }};"></div>
@@ -175,8 +175,8 @@
       📊 Résultats en temps réel
     </h2>
     <div id="results-list">
-      {% for prop in proposals | sort(attribute='vote_count', reverse=True) %}
-      {% set vote_count = prop.vote_count() %}
+      {% for prop in proposals_sorted %}
+      {% set vote_count = vote_counts[prop.id] %}
       {% set total = participants|length %}
       {% set pct = (vote_count / total * 100)|int if total > 0 else 0 %}
       <div style="margin-bottom:16px;" class="result-item">
