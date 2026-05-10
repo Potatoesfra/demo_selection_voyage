@@ -5,11 +5,16 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.secret_key = os.environ.get('SECRET_KEY', 'tripvote-secret-key-change-in-prod')
+# Sur Render, le disque persistant est monté sur /instance
+# En local, on écrit dans instance/ à côté de app.py
+_default_db = ('sqlite:////instance/tripvote.db'
+               if os.path.isdir('/instance')
+               else 'sqlite:///tripvote.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
 db = SQLAlchemy(app)
 
@@ -145,15 +150,20 @@ def trip_view():
 
     my_votes = set()
     if participant:
-        # only keep votes for proposals that still exist
         existing_ids = {p.id for p in proposals}
         my_votes = {v.proposal_id for v in Vote.query.filter_by(participant_id=participant.id).all()
                     if v.proposal_id in existing_ids}
 
+    # pre-compute vote counts for sorting in template
+    vote_counts = {prop.id: len(votes_map[prop.id]) for prop in proposals}
+    proposals_sorted = sorted(proposals, key=lambda p: vote_counts[p.id], reverse=True)
+
     return render_template('trip.html', trip=trip, proposals=proposals,
+                           proposals_sorted=proposals_sorted,
                            participants=participants, participant=participant,
                            is_admin=is_admin(), votes_map=votes_map,
-                           my_votes=my_votes, participants_by_id=participants_by_id)
+                           my_votes=my_votes, participants_by_id=participants_by_id,
+                           vote_counts=vote_counts)
 
 
 # ─── Routes: Voting ───────────────────────────────────────────────────────────
@@ -216,6 +226,17 @@ def delete_trip():
     if trip:
         db.session.delete(trip)
         db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/reset', methods=['POST'])
+def reset_all():
+    """Supprime absolument tout : trip, propositions, participants, votes."""
+    if not is_admin(): return redirect(url_for('admin_login'))
+    Vote.query.delete()
+    Proposal.query.delete()
+    Trip.query.delete()
+    Participant.query.delete()
+    db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
 
