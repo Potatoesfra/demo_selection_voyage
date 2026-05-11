@@ -8,8 +8,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY')
 
 # ── Database URL ───────────────────────────────────────────────────────────────
-# En prod : définir DATABASE_URL dans les variables d'env Render
-# Format Neon/Supabase : postgresql://user:pass@host/dbname?sslmode=require
+_db_url = os.environ.get('DATABASE_URL')
 
 
 # Neon/Heroku fournissent parfois "postgres://" — SQLAlchemy 1.4+ exige "postgresql://"
