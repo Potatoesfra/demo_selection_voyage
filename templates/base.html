@@ -167,7 +167,14 @@
         <span class="tag" style="background:rgba(129,140,248,0.15);color:var(--accent2);">⚡ Admin</span>
         <a href="/admin" class="nav-link text-sm">Dashboard</a>
       {% elif participant %}
-        <span class="tag tag-pro">{{ participant.emoji }} {{ participant.name }}</span>
+        <span class="tag tag-pro" style="display:flex; align-items:center; gap:6px;">
+          {% if participant.avatar_url %}
+            <img src="{{ participant.avatar_url }}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">
+          {% else %}
+            {{ participant.emoji or '👤' }}
+          {% endif %}
+          {{ participant.name }}
+        </span>
       {% endif %}
       {% if is_admin or participant %}
         <a href="/logout" class="nav-link text-sm">Déconnexion</a>
