@@ -1,10 +1,71 @@
 {% extends "base.html" %}
 {% block title %}TripVote — Choisissez votre identité{% endblock %}
 
-{% block content %}
-<div class="fade-up" style="max-width: 480px; margin: 80px auto;">
+{% block extra_head %}
+<style>
+  .p-card {
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .p-card:hover { border-color: var(--accent); background: rgba(110,231,183,0.04); }
+  .p-card.selected { border-color: var(--accent); background: rgba(110,231,183,0.08); }
+  .p-card .avatar-display {
+    width: 52px; height: 52px; border-radius: 50%;
+    margin: 0 auto 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .p-card.selected .avatar-display { border-color: var(--accent); }
+  .p-card .avatar-display img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
 
-  <!-- Header -->
+  .avatar-picker {
+    display: none;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 14px;
+    animation: fadeUp 0.2s ease both;
+  }
+  .avatar-picker.open { display: block; }
+
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+  .emoji-opt {
+    width: 38px; height: 38px; border-radius: 9px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; cursor: pointer; transition: all 0.15s;
+  }
+  .emoji-opt:hover { border-color: var(--accent); transform: scale(1.1); }
+  .emoji-opt.chosen { border-color: var(--accent); background: rgba(110,231,183,0.15); }
+
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(110,231,183,0.04); }
+
+  .avatar-preview { display:none; margin-top:10px; text-align:center; }
+  .avatar-preview img { width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-up" style="max-width: 480px; margin: 60px auto;">
+
   <div class="text-center mb-10">
     <div style="font-size:3rem; margin-bottom:16px;">✈️</div>
     <h1 style="font-family:'Syne',sans-serif; font-size:2.5rem; font-weight:800; color:var(--text); line-height:1.1;" class="mb-3">
@@ -14,7 +75,6 @@
   </div>
 
   {% if trip %}
-  <!-- Trip exists: join as participant -->
   <div class="card p-6 mb-6">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
       <div style="width:10px; height:10px; border-radius:50%; background:var(--accent);"></div>
@@ -22,70 +82,183 @@
     </div>
 
     {% if participants %}
-      <h2 style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.1rem; margin-bottom:16px;">Qui êtes-vous ?</h2>
-      <form action="/join" method="POST">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:16px;">
-          {% for p in participants %}
-          <label style="cursor:pointer;">
-            <input type="radio" name="participant_id" value="{{ p.id }}" style="display:none;" required class="peer">
-            <div style="
-              border: 1.5px solid var(--border);
-              border-radius: 12px;
-              padding: 14px;
-              text-align:center;
-              transition: all 0.2s;
-              cursor:pointer;
-            " class="participant-card" data-id="{{ p.id }}">
-              <div style="font-size:1.8rem; margin-bottom:6px;">{{ p.emoji }}</div>
-              <div style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.9rem;">{{ p.name }}</div>
-            </div>
-          </label>
+    <h2 style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.1rem; margin-bottom:16px;">Qui êtes-vous ?</h2>
+
+    <form action="/join" method="POST" id="join-form">
+      <input type="hidden" name="participant_id" id="selected-pid">
+      <input type="hidden" name="chosen_emoji" id="chosen-emoji">
+      <input type="hidden" name="avatar_data" id="avatar-data">
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:4px;">
+        {% for p in participants %}
+        <div class="p-card" id="pcard-{{ p.id }}"
+             onclick="selectParticipant({{ p.id }}, '{{ p.emoji or '👤' }}', {{ 'true' if p.avatar_url else 'false' }})">
+          <div class="avatar-display" id="avatar-display-{{ p.id }}">
+            {% if p.avatar_url %}
+              <img src="{{ p.avatar_url }}" alt="{{ p.name }}">
+            {% else %}
+              <span>{{ p.emoji or '👤' }}</span>
+            {% endif %}
+          </div>
+          <div style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.9rem;">{{ p.name }}</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Avatar picker (revealed on selection) -->
+      <div class="avatar-picker" id="avatar-picker">
+        <p style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; margin-bottom:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em;">
+          Personnalisez votre avatar
+        </p>
+
+        <div class="emoji-grid" id="emoji-grid">
+          {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
+          <div class="emoji-opt" onclick="pickEmoji('{{ e }}', this)">{{ e }}</div>
           {% endfor %}
         </div>
-        <button type="submit" class="btn-primary w-full text-center" style="width:100%; text-align:center;">
-          Rejoindre le trip →
-        </button>
-      </form>
+
+        <div style="font-size:0.78rem; color:var(--muted); text-align:center; margin-bottom:8px;">— ou uploadez une photo —</div>
+
+        <div class="upload-zone" onclick="document.getElementById('photo-input').click()">
+          <div style="font-size:1.3rem; margin-bottom:3px;">📷</div>
+          <div style="font-size:0.8rem; color:var(--muted);">Choisir une photo</div>
+        </div>
+        <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event)">
+
+        <div class="avatar-preview" id="avatar-preview">
+          <img id="avatar-preview-img" src="" alt="preview">
+          <p style="font-size:0.78rem; color:var(--accent); margin-top:6px; font-family:'Syne',sans-serif; font-weight:600;">✓ Photo sélectionnée</p>
+          <button type="button" onclick="clearPhoto()"
+            style="font-size:0.75rem; color:var(--muted); background:none; border:none; cursor:pointer; text-decoration:underline;">
+            Supprimer
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" id="join-btn" class="btn-primary"
+        style="width:100%; text-align:center; margin-top:16px; opacity:0.4; pointer-events:none; transition:opacity 0.2s;">
+        Rejoindre le trip →
+      </button>
+    </form>
+
     {% else %}
-      <p style="color:var(--muted); text-align:center; padding:20px 0;">
-        Aucun participant défini pour l'instant.<br>
-        <span style="font-size:0.85rem;">L'admin doit d'abord ajouter les participants.</span>
-      </p>
+    <p style="color:var(--muted); text-align:center; padding:20px 0;">
+      Aucun participant défini.<br>
+      <span style="font-size:0.85rem;">L'admin doit d'abord ajouter les participants.</span>
+    </p>
     {% endif %}
   </div>
 
   {% else %}
-  <!-- No trip yet -->
   <div class="card p-8 text-center">
     <div style="font-size:2rem; margin-bottom:12px;">🗺️</div>
     <h2 style="font-family:'Syne',sans-serif; font-weight:700; margin-bottom:8px;">Aucun trip actif</h2>
-    <p style="color:var(--muted); font-size:0.9rem; margin-bottom:20px;">
-      L'admin doit créer un trip pour commencer.
-    </p>
+    <p style="color:var(--muted); font-size:0.9rem; margin-bottom:20px;">L'admin doit créer un trip pour commencer.</p>
     <a href="/admin/login" class="btn-ghost">Accès admin</a>
   </div>
   {% endif %}
 
 </div>
 
-<style>
-  input[type="radio"]:checked + .participant-card {
-    border-color: var(--accent) !important;
-    background: rgba(110,231,183,0.07);
-  }
-</style>
 <script>
-  document.querySelectorAll('.participant-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const radio = card.previousElementSibling;
-      radio.checked = true;
-      document.querySelectorAll('.participant-card').forEach(c => {
-        c.style.borderColor = 'var(--border)';
-        c.style.background = 'transparent';
-      });
-      card.style.borderColor = 'var(--accent)';
-      card.style.background = 'rgba(110,231,183,0.07)';
+let currentPid = null;
+
+// Default emoji per participant (stored so we can restore on clearPhoto)
+const defaults = {
+  {% for p in participants %}
+  {{ p.id }}: '{{ p.emoji or '👤' }}',
+  {% endfor %}
+};
+
+function selectParticipant(pid, defaultEmoji, hasAvatar) {
+  document.querySelectorAll('.p-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('pcard-' + pid).classList.add('selected');
+  currentPid = pid;
+
+  document.getElementById('selected-pid').value = pid;
+  document.getElementById('avatar-picker').classList.add('open');
+
+  // Reset picker state
+  clearPhoto(false);
+  document.getElementById('avatar-data').value = '';
+
+  // Pre-highlight current emoji (unless they have a photo)
+  if (!hasAvatar) {
+    document.querySelectorAll('.emoji-opt').forEach(el => {
+      el.classList.toggle('chosen', el.textContent.trim() === defaultEmoji);
     });
-  });
+    document.getElementById('chosen-emoji').value = defaultEmoji;
+  } else {
+    document.querySelectorAll('.emoji-opt').forEach(el => el.classList.remove('chosen'));
+  }
+
+  // Unlock join button
+  const btn = document.getElementById('join-btn');
+  btn.style.opacity = '1';
+  btn.style.pointerEvents = 'auto';
+}
+
+function pickEmoji(emoji, el) {
+  clearPhoto(false);
+  document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('chosen'));
+  el.classList.add('chosen');
+  document.getElementById('chosen-emoji').value = emoji;
+  document.getElementById('avatar-data').value = '';
+
+  // Live update the card
+  if (currentPid) {
+    const disp = document.getElementById('avatar-display-' + currentPid);
+    disp.innerHTML = '<span>' + emoji + '</span>';
+  }
+}
+
+function handlePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      // Crop & resize to 200×200
+      const canvas = document.createElement('canvas');
+      canvas.width = 200; canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2, sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, 200, 200);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+      // Show preview
+      document.getElementById('avatar-preview-img').src = dataUrl;
+      document.getElementById('avatar-preview').style.display = 'block';
+      document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('chosen'));
+      document.getElementById('avatar-data').value = dataUrl;
+      document.getElementById('chosen-emoji').value = '';
+
+      // Live update card
+      if (currentPid) {
+        const disp = document.getElementById('avatar-display-' + currentPid);
+        disp.innerHTML = '<img src="' + dataUrl + '">';
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto(restoreEmoji = true) {
+  document.getElementById('avatar-data').value = '';
+  document.getElementById('avatar-preview').style.display = 'none';
+  document.getElementById('photo-input').value = '';
+  if (restoreEmoji && currentPid) {
+    const emoji = defaults[currentPid] || '👤';
+    document.getElementById('chosen-emoji').value = emoji;
+    document.querySelectorAll('.emoji-opt').forEach(el => {
+      el.classList.toggle('chosen', el.textContent.trim() === emoji);
+    });
+    const disp = document.getElementById('avatar-display-' + currentPid);
+    disp.innerHTML = '<span>' + emoji + '</span>';
+  }
+}
 </script>
 {% endblock %}
