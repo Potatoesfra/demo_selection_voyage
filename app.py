@@ -5,16 +5,25 @@ import os
 import json
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'tripvote-secret-key-change-in-prod')
-# Sur Render, le disque persistant est monté sur /instance
-# En local, on écrit dans instance/ à côté de app.py
-_default_db = ('sqlite:////instance/tripvote.db'
-               if os.path.isdir('/instance')
-               else 'sqlite:///tripvote.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', _default_db)
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.environ.get('SECRET_KEY')
 
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+# ── Database URL ───────────────────────────────────────────────────────────────
+# En prod : définir DATABASE_URL dans les variables d'env Render
+# Format Neon/Supabase : postgresql://user:pass@host/dbname?sslmode=require
+
+
+# Neon/Heroku fournissent parfois "postgres://" — SQLAlchemy 1.4+ exige "postgresql://"
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,      # vérifie la connexion avant chaque requête
+    'pool_recycle': 300,        # recycle les connexions toutes les 5 min
+}
+
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 
 db = SQLAlchemy(app)
 
@@ -31,6 +40,7 @@ class Participant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
     emoji = db.Column(db.String(10), default='👤')
+    avatar_url = db.Column(db.Text, default='')  # base64 data URL ou vide
     votes = db.relationship('Vote', backref='participant', lazy=True, cascade='all, delete-orphan')
 
 class Proposal(db.Model):
@@ -106,6 +116,15 @@ def join():
     participant_id = request.form.get('participant_id')
     p = Participant.query.get(participant_id)
     if p:
+        avatar_data = request.form.get('avatar_data', '').strip()
+        chosen_emoji = request.form.get('chosen_emoji', '').strip()
+        if avatar_data and avatar_data.startswith('data:image'):
+            p.avatar_url = avatar_data
+            p.emoji = ''
+        elif chosen_emoji:
+            p.emoji = chosen_emoji
+            p.avatar_url = ''
+        db.session.commit()
         session['participant_id'] = p.id
         session['is_admin'] = False
     return redirect(url_for('trip_view'))
@@ -187,7 +206,11 @@ def vote(proposal_id):
 
     count = Vote.query.filter_by(proposal_id=proposal_id).count()
     voters = db.session.query(Participant).join(Vote).filter(Vote.proposal_id == proposal_id).all()
-    voters_html = ''.join([f'<span class="voter-badge" title="{v.name}">{v.emoji}</span>' for v in voters])
+    def badge(v):
+        if v.avatar_url:
+            return f'<span class="voter-badge" title="{v.name}"><img src="{v.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>'
+        return f'<span class="voter-badge" title="{v.name}">{v.emoji or "👤"}</span>'
+    voters_html = ''.join([badge(v) for v in voters])
 
     return jsonify({'liked': liked, 'count': count, 'voters_html': voters_html})
 
@@ -366,10 +389,10 @@ def api_results():
         result.append({
             'id': prop.id,
             'title': prop.title,
-            'count': prop.vote_count(),
+            'count': len(voters),
             'color': prop.color,
             'icon': prop.icon,
-            'voters': [{'name': v.name, 'emoji': v.emoji} for v in voters]
+            'voters': [{'name': v.name, 'emoji': v.emoji or '👤', 'avatar': v.avatar_url or ''} for v in voters]
         })
     return jsonify(result)
 
@@ -386,7 +409,7 @@ def api_proposals_map():
                 'id': p.id, 'title': p.title, 'icon': p.icon,
                 'color': p.color, 'lat': p.latitude, 'lng': p.longitude,
                 'address': p.address, 'price': p.price_per_person,
-                'votes': p.vote_count()
+                'votes': len(p.votes)
             })
     return jsonify(result)
 
