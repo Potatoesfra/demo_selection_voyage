@@ -168,9 +168,11 @@
         <a href="/admin" class="nav-link text-sm">Dashboard</a>
       {% elif participant %}
         <span class="tag tag-pro" style="display:flex; align-items:center; gap:6px;">
-          <span class="tag tag-pro" style="display:flex; align-items:center; gap:6px;">
-            {{ participant.emoji or '👤' }} {{ participant.name }}
-          </span>
+          {% if participant.avatar_url %}
+            <img src="{{ participant.avatar_url }}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">
+          {% else %}
+            {{ participant.emoji or '👤' }}
+          {% endif %}
           {{ participant.name }}
         </span>
       {% endif %}
