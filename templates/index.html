@@ -5,40 +5,25 @@
 <style>
   /* ── Tabs ── */
   .tab-bar {
-    display: flex;
-    gap: 4px;
+    display: flex; gap: 4px;
     background: var(--surface2);
-    border-radius: 12px;
-    padding: 4px;
+    border-radius: 12px; padding: 4px;
     margin-bottom: 20px;
   }
   .tab-btn {
-    flex: 1;
-    padding: 9px 12px;
-    border-radius: 9px;
-    border: none;
-    background: transparent;
+    flex: 1; padding: 9px 12px; border-radius: 9px;
+    border: none; background: transparent;
     color: var(--muted);
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 0.88rem;
-    cursor: pointer;
-    transition: all 0.2s;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.88rem;
+    cursor: pointer; transition: all 0.2s;
   }
-  .tab-btn.active {
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
+  .tab-btn.active { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
 
   /* ── Participant cards ── */
   .p-card {
-    border: 1.5px solid var(--border);
-    border-radius: 14px;
-    padding: 16px 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
+    border: 1.5px solid var(--border); border-radius: 14px;
+    padding: 16px 12px; text-align: center;
+    cursor: pointer; transition: all 0.2s; user-select: none;
   }
   .p-card:hover { border-color: var(--accent); background: rgba(110,231,183,0.04); }
   .p-card.selected { border-color: var(--accent); background: rgba(110,231,183,0.08); }
@@ -47,20 +32,16 @@
     margin: 0 auto 8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.8rem;
-    background: var(--surface2);
-    border: 2px solid var(--border);
-    transition: border-color 0.2s;
+    background: var(--surface2); border: 2px solid var(--border);
+    transition: border-color 0.2s; pointer-events: none;
   }
   .p-card.selected .avatar-display { border-color: var(--accent); }
 
-  /* ── Emoji picker (1ère connexion) ── */
+  /* ── Emoji picker ── */
   .emoji-picker-box {
     display: none;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 16px;
-    margin-top: 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-top: 14px;
     animation: fadeUp 0.2s ease both;
   }
   .emoji-picker-box.open { display: block; }
@@ -68,29 +49,40 @@
   .emoji-grid { display: flex; flex-wrap: wrap; gap: 7px; }
   .emoji-opt {
     width: 38px; height: 38px; border-radius: 9px;
-    border: 1.5px solid var(--border);
-    background: var(--surface);
+    border: 1.5px solid var(--border); background: var(--surface);
     display: flex; align-items: center; justify-content: center;
     font-size: 1.2rem; cursor: pointer; transition: all 0.15s;
   }
   .emoji-opt:hover { border-color: var(--accent); transform: scale(1.1); }
   .emoji-opt.chosen { border-color: var(--accent); background: rgba(110,231,183,0.15); }
 
-  /* ── New profile form ── */
-  .new-profile-form { display: none; }
-  .new-profile-form.open { display: block; }
-
-  /* ── Notice badge ── */
-  .notice {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(110,231,183,0.07);
-    border: 1px solid rgba(110,231,183,0.2);
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 0.82rem;
-    color: var(--accent);
-    margin-bottom: 14px;
+  /* ── Name check feedback ── */
+  .name-feedback {
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 0.82rem; margin-top: 8px; display: none;
   }
+  .name-feedback.error {
+    display: block;
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #F87171;
+  }
+  .name-feedback.warning {
+    display: block;
+    background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.25); color: #FCD34D;
+  }
+  .name-feedback.ok {
+    display: block;
+    background: rgba(110,231,183,0.07); border: 1px solid rgba(110,231,183,0.2); color: var(--accent);
+  }
+
+  .similar-card {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; margin: 4px 4px 0 0;
+    border: 1.5px solid var(--border); border-radius: 10px;
+    background: var(--surface); cursor: pointer;
+    font-size: 0.85rem; font-family: 'Syne', sans-serif; font-weight: 600;
+    transition: all 0.15s; color: var(--text);
+  }
+  .similar-card:hover { border-color: var(--accent); background: rgba(110,231,183,0.06); }
 </style>
 {% endblock %}
 
@@ -122,7 +114,7 @@
       </button>
     </div>
 
-    <!-- ─ Onglet : sélectionner un profil existant ─ -->
+    <!-- ══ Onglet : profil existant ══ -->
     <div id="panel-existing">
       {% if participants %}
       <h2 style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.05rem; margin-bottom:14px; color:var(--muted);">
@@ -135,8 +127,11 @@
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:4px;">
           {% for p in participants %}
+          {# Stocker l'emoji dans un attribut data pour éviter les problèmes d'échappement JS #}
           <div class="p-card" id="pcard-{{ p.id }}"
-               onclick="selectParticipant({{ p.id }}, '{{ p.emoji or '' }}')">
+               data-pid="{{ p.id }}"
+               data-emoji="{{ p.emoji|e }}"
+               onclick="selectParticipant(this)">
             <div class="avatar-display" id="avatar-display-{{ p.id }}">
               <span>{{ p.emoji if p.emoji else '👤' }}</span>
             </div>
@@ -148,14 +143,14 @@
           {% endfor %}
         </div>
 
-        <!-- Emoji picker : affiché uniquement si c'est la 1ère connexion du profil sélectionné -->
+        <!-- Emoji picker : uniquement pour la 1ère connexion -->
         <div class="emoji-picker-box" id="emoji-picker-box">
           <p style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; margin-bottom:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em;">
             Choisissez votre emoji — une seule fois !
           </p>
-          <div class="emoji-grid" id="emoji-grid">
+          <div class="emoji-grid">
             {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
-            <div class="emoji-opt" onclick="pickEmoji('{{ e }}', this)">{{ e }}</div>
+            <div class="emoji-opt" data-emoji="{{ e }}" onclick="pickEmoji('{{ e }}', this)">{{ e }}</div>
             {% endfor %}
           </div>
         </div>
@@ -168,25 +163,46 @@
 
       {% else %}
       <p style="color:var(--muted); text-align:center; padding:20px 0;">
-        Aucun participant défini.<br>
-        <span style="font-size:0.85rem;">L'admin doit d'abord ajouter les participants.</span>
+        Aucun participant défini encore.<br>
+        <span style="font-size:0.85rem;">Créez votre profil dans l'onglet "Nouveau profil".</span>
       </p>
       {% endif %}
     </div>
 
-    <!-- ─ Onglet : nouveau profil ─ -->
+    <!-- ══ Onglet : nouveau profil ══ -->
     <div id="panel-new" style="display:none;">
-      <div class="notice">
-        <span style="font-size:1.1rem;">ℹ️</span>
-        <span>Les profils sont créés par l'administrateur du trip. Si votre nom n'apparaît pas dans la liste, contactez l'admin pour qu'il vous ajoute.</span>
-      </div>
-      <div style="text-align:center; padding: 16px 0 8px;">
-        <div style="font-size:2rem; margin-bottom:10px;">🔒</div>
-        <p style="color:var(--muted); font-size:0.9rem; line-height:1.6;">
-          Besoin d'être ajouté ?<br>
-          <a href="/admin/login" style="color:var(--accent); font-weight:600; text-decoration:none;">Accès admin →</a>
-        </p>
-      </div>
+      <form action="/register" method="POST" id="register-form" autocomplete="off">
+        <input type="hidden" name="chosen_emoji" id="new-chosen-emoji">
+
+        <!-- Champ nom -->
+        <div style="margin-bottom:14px;">
+          <label style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:8px;">
+            Votre prénom
+          </label>
+          <input type="text" name="name" id="new-name" class="input-field"
+            placeholder="Ex : Sophie" maxlength="50" autocomplete="off"
+            oninput="onNameInput(this.value)">
+          <div class="name-feedback" id="name-feedback"></div>
+          <div id="similar-suggestions" style="margin-top:6px;"></div>
+        </div>
+
+        <!-- Emoji picker -->
+        <div style="margin-bottom:18px;">
+          <label style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:8px;">
+            Choisissez votre emoji
+          </label>
+          <div class="emoji-grid" id="new-emoji-grid">
+            {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
+            <div class="emoji-opt" onclick="pickNewEmoji('{{ e }}', this)">{{ e }}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <button type="submit" id="register-btn" class="btn-primary"
+          style="width:100%; text-align:center; opacity:0.4; pointer-events:none; transition:opacity 0.2s;">
+          Créer mon profil →
+        </button>
+      </form>
     </div>
 
   </div>
@@ -203,67 +219,153 @@
 </div>
 
 <script>
-// Données des participants : emoji vide = première connexion
-const participantEmojis = {
-  {% for p in participants %}
-  {{ p.id }}: {{ '"' + p.emoji + '"' if p.emoji else '""' }},
-  {% endfor %}
-};
-
+/* ════════════════════════════════
+   Onglet : profil existant
+════════════════════════════════ */
 let currentPid = null;
-let currentIsFirst = false;
 
 function showTab(tab) {
   document.getElementById('panel-existing').style.display = tab === 'existing' ? 'block' : 'none';
-  document.getElementById('panel-new').style.display = tab === 'new' ? 'block' : 'none';
+  document.getElementById('panel-new').style.display      = tab === 'new'      ? 'block' : 'none';
   document.getElementById('tab-existing').classList.toggle('active', tab === 'existing');
   document.getElementById('tab-new').classList.toggle('active', tab === 'new');
 }
 
-function selectParticipant(pid, existingEmoji) {
+// Lecture via attribut data-* pour éviter tout problème d'échappement JS
+function selectParticipant(card) {
   document.querySelectorAll('.p-card').forEach(c => c.classList.remove('selected'));
-  document.getElementById('pcard-' + pid).classList.add('selected');
+  card.classList.add('selected');
+
+  const pid        = card.dataset.pid;
+  const savedEmoji = card.dataset.emoji;   // vide si 1ère connexion
   currentPid = pid;
 
   document.getElementById('selected-pid').value = pid;
 
-  const isFirst = !existingEmoji;
-  currentIsFirst = isFirst;
-
   const pickerBox = document.getElementById('emoji-picker-box');
-  const joinBtn = document.getElementById('join-btn');
+  const joinBtn   = document.getElementById('join-btn');
 
-  if (isFirst) {
-    // Première connexion : doit choisir un emoji
+  if (!savedEmoji) {
+    // Première connexion : choisir un emoji
     pickerBox.classList.add('open');
-    document.querySelectorAll('.emoji-opt').forEach(el => el.classList.remove('chosen'));
+    document.querySelectorAll('#emoji-picker-box .emoji-opt').forEach(el => el.classList.remove('chosen'));
     document.getElementById('chosen-emoji').value = '';
-    // Bouton désactivé jusqu'au choix d'emoji
-    joinBtn.style.opacity = '0.4';
+    joinBtn.style.opacity      = '0.4';
     joinBtn.style.pointerEvents = 'none';
   } else {
-    // Connexion suivante : emoji déjà fixé, on peut rejoindre directement
+    // Déjà connecté : emoji figé, rejoindre directement
     pickerBox.classList.remove('open');
-    document.getElementById('chosen-emoji').value = existingEmoji;
-    joinBtn.style.opacity = '1';
+    document.getElementById('chosen-emoji').value = savedEmoji;
+    joinBtn.style.opacity      = '1';
     joinBtn.style.pointerEvents = 'auto';
   }
 }
 
 function pickEmoji(emoji, el) {
-  document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('chosen'));
+  document.querySelectorAll('#emoji-picker-box .emoji-opt').forEach(e => e.classList.remove('chosen'));
   el.classList.add('chosen');
   document.getElementById('chosen-emoji').value = emoji;
 
-  // Mise à jour live de la carte
   if (currentPid) {
     document.getElementById('avatar-display-' + currentPid).innerHTML = '<span>' + emoji + '</span>';
   }
 
-  // Activer le bouton
   const joinBtn = document.getElementById('join-btn');
-  joinBtn.style.opacity = '1';
+  joinBtn.style.opacity      = '1';
   joinBtn.style.pointerEvents = 'auto';
+}
+
+
+/* ════════════════════════════════
+   Onglet : nouveau profil
+════════════════════════════════ */
+let newEmojiChosen = '';
+let nameCheckTimer = null;
+let nameIsBlocked  = false;  // true si nom exact déjà pris
+
+function pickNewEmoji(emoji, el) {
+  document.querySelectorAll('#new-emoji-grid .emoji-opt').forEach(e => e.classList.remove('chosen'));
+  el.classList.add('chosen');
+  newEmojiChosen = emoji;
+  document.getElementById('new-chosen-emoji').value = emoji;
+  updateRegisterBtn();
+}
+
+function updateRegisterBtn() {
+  const name = document.getElementById('new-name').value.trim();
+  const btn  = document.getElementById('register-btn');
+  const ok   = name.length >= 2 && newEmojiChosen && !nameIsBlocked;
+  btn.style.opacity      = ok ? '1' : '0.4';
+  btn.style.pointerEvents = ok ? 'auto' : 'none';
+}
+
+function onNameInput(value) {
+  clearTimeout(nameCheckTimer);
+  if (value.trim().length < 2) {
+    hideFeedback();
+    updateRegisterBtn();
+    return;
+  }
+  nameCheckTimer = setTimeout(() => checkName(value.trim()), 400);
+}
+
+function hideFeedback() {
+  const fb = document.getElementById('name-feedback');
+  fb.className = 'name-feedback';
+  fb.textContent = '';
+  document.getElementById('similar-suggestions').innerHTML = '';
+  nameIsBlocked = false;
+}
+
+function checkName(name) {
+  fetch('/api/check-name?name=' + encodeURIComponent(name))
+    .then(r => r.json())
+    .then(data => {
+      const fb  = document.getElementById('name-feedback');
+      const sug = document.getElementById('similar-suggestions');
+      sug.innerHTML = '';
+      nameIsBlocked = false;
+
+      if (!data.available && data.exact) {
+        // Nom exact déjà pris
+        nameIsBlocked = true;
+        fb.className   = 'name-feedback error';
+        fb.textContent = '⚠️ Ce prénom est déjà utilisé. Sélectionnez-le dans la liste ci-dessous ou choisissez un autre nom.';
+        // Afficher le profil existant comme suggestion cliquable
+        const card = makeSimilarCard(data.exact, true);
+        sug.appendChild(card);
+        // Ajouter aussi les autres similaires
+        (data.similar || []).forEach(p => sug.appendChild(makeSimilarCard(p, false)));
+      } else if (data.similar && data.similar.length > 0) {
+        // Similaires mais pas exact
+        fb.className   = 'name-feedback warning';
+        fb.textContent = '🔍 Des profils similaires existent déjà — est-ce vous ?';
+        data.similar.forEach(p => sug.appendChild(makeSimilarCard(p, false)));
+      } else {
+        fb.className   = 'name-feedback ok';
+        fb.textContent = '✓ Prénom disponible !';
+      }
+      updateRegisterBtn();
+    });
+}
+
+function makeSimilarCard(p, isExact) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'similar-card';
+  btn.innerHTML = '<span>' + p.emoji + '</span><span>' + p.name + (isExact ? ' <span style="font-size:0.72rem;color:var(--muted);">(c\'est moi)</span>' : '') + '</span>';
+  btn.onclick = () => switchToExistingProfile(p.id, p.emoji, p.name);
+  return btn;
+}
+
+function switchToExistingProfile(pid, emoji, name) {
+  // Basculer vers l'onglet "existant" et présélectionner ce profil
+  showTab('existing');
+  const card = document.querySelector('[data-pid="' + pid + '"]');
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    selectParticipant(card);
+  }
 }
 </script>
 {% endblock %}
