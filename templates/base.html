@@ -168,13 +168,10 @@
         <a href="/admin" class="nav-link text-sm">Dashboard</a>
       {% elif participant %}
         <span class="tag tag-pro" style="display:flex; align-items:center; gap:6px;">
-          {% if participant.avatar_url %}
-            <img src="{{ participant.avatar_url }}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">
-          {% else %}
-            {{ participant.emoji or '👤' }}
-          {% endif %}
+          {{ participant.emoji or '👤' }}
           {{ participant.name }}
         </span>
+        <a href="/switch" class="nav-link text-sm" title="Changer de profil">🔄</a>
       {% endif %}
       {% if is_admin or participant %}
         <a href="/logout" class="nav-link text-sm">Déconnexion</a>
