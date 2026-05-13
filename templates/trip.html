@@ -125,11 +125,9 @@
               {% set voter = participants_by_id.get(pid) %}
               {% if voter %}
                 <span class="voter-badge" title="{{ voter.name }}">
-                  {% if voter.avatar_url %}
-                    <img src="{{ voter.avatar_url }}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
-                  {% else %}
+                  
                     {{ voter.emoji or '👤' }}
-                  {% endif %}
+                  
                 </span>
               {% endif %}
             {% endfor %}
@@ -199,11 +197,9 @@
             {% set voter = participants_by_id.get(pid) %}
             {% if voter %}
               <span class="voter-badge" title="{{ voter.name }}">
-                {% if voter.avatar_url %}
-                  <img src="{{ voter.avatar_url }}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
-                {% else %}
+                
                   {{ voter.emoji or '👤' }}
-                {% endif %}
+                
               </span>
             {% endif %}
           {% endfor %}
