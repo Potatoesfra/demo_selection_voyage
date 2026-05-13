@@ -180,7 +180,7 @@
             Ta bucque
           </label>
           <input type="text" name="name" id="new-name" class="input-field"
-            placeholder="Ex : Sophie" maxlength="50" autocomplete="off"
+            placeholder="Ex : Joe Lopez si t'es gitan" maxlength="50" autocomplete="off"
             oninput="onNameInput(this.value)">
           <div class="name-feedback" id="name-feedback"></div>
           <div id="similar-suggestions" style="margin-top:6px;"></div>
@@ -192,7 +192,7 @@
             Choisis ton emoji mon chum
           </label>
           <div class="emoji-grid" id="new-emoji-grid">
-            {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
+            {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊', '✨', '🍀', '🍕', '🌮', '🍦', '🎨', '🚀', '🚲', '🕹️', '👻', '☀️', '🌙', '🌊', '🌴', '🏔️', '🦊', '🦋', '🐝', '🍄', '🥐', '🥂', '🎉'] %}
             <div class="emoji-opt" onclick="pickNewEmoji('{{ e }}', this)">{{ e }}</div>
             {% endfor %}
           </div>
