@@ -416,8 +416,12 @@ function openVotersOverlay(proposalId) {
   const title   = document.getElementById('voters-overlay-title');
   const list    = document.getElementById('voters-overlay-list');
 
-  title.textContent = data.title + ' — ' + data.voters.length + ' vote' + (data.voters.length !== 1 ? 's' : '');
-
+  //title.textContent = data.title + ' — ' + data.voters.length + ' vote' + (data.voters.length !== 1 ? 's' : '');
+  
+  title.innerHTML = `
+      <div style="font-size:0.9rem; color:var(--muted); margin-bottom:4px;">👀 Voyeur va ! J'espère que t'as voté aussi !</div>
+      <div>${data.title} — ${data.voters.length} vote${data.voters.length !== 1 ? 's' : ''}</div>
+  `;
   if (data.voters.length === 0) {
     list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun vote pour le moment.</p>';
   } else {
