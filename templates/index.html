@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}TripVote — Connexion{% endblock %}
+{% block title %}WixStrass — Connexion{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -92,9 +92,9 @@
   <div class="text-center mb-10">
     <div style="font-size:3rem; margin-bottom:16px;">✈️</div>
     <h1 style="font-family:'Syne',sans-serif; font-size:2.5rem; font-weight:800; color:var(--text); line-height:1.1;" class="mb-3">
-      Trip<span style="color:var(--accent);">Vote</span>
+      Wix<span style="color:var(--accent);">Strass</span>
     </h1>
-    <p style="color:var(--muted);">Planifiez votre weekend en groupe — votez, comparez, décidez.</p>
+    <p style="color:var(--muted);">Inch Gorg'z ça fonctionne.</p>
   </div>
 
   {% if trip %}
@@ -146,7 +146,7 @@
         <!-- Emoji picker : uniquement pour la 1ère connexion -->
         <div class="emoji-picker-box" id="emoji-picker-box">
           <p style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; margin-bottom:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em;">
-            Choisissez votre emoji — une seule fois !
+            OH CLIQUE — une seule fois tabarnak !
           </p>
           <div class="emoji-grid">
             {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
@@ -157,7 +157,7 @@
 
         <button type="submit" id="join-btn" class="btn-primary"
           style="width:100%; text-align:center; margin-top:16px; opacity:0.4; pointer-events:none; transition:opacity 0.2s;">
-          Rejoindre le trip →
+          Rejoindre le wix →
         </button>
       </form>
 
@@ -177,7 +177,7 @@
         <!-- Champ nom -->
         <div style="margin-bottom:14px;">
           <label style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:8px;">
-            Votre prénom
+            Ta bucque
           </label>
           <input type="text" name="name" id="new-name" class="input-field"
             placeholder="Ex : Sophie" maxlength="50" autocomplete="off"
@@ -189,7 +189,7 @@
         <!-- Emoji picker -->
         <div style="margin-bottom:18px;">
           <label style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:8px;">
-            Choisissez votre emoji
+            Choisis ton emoji mon chum
           </label>
           <div class="emoji-grid" id="new-emoji-grid">
             {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
@@ -211,7 +211,7 @@
   <div class="card p-8 text-center">
     <div style="font-size:2rem; margin-bottom:12px;">🗺️</div>
     <h2 style="font-family:'Syne',sans-serif; font-weight:700; margin-bottom:8px;">Aucun trip actif</h2>
-    <p style="color:var(--muted); font-size:0.9rem; margin-bottom:20px;">L'admin doit créer un trip pour commencer.</p>
+    <p style="color:var(--muted); font-size:0.9rem; margin-bottom:20px;">L'admin doit cse bouger l'eucs pour commencer.</p>
     <a href="/admin/login" class="btn-ghost">Accès admin</a>
   </div>
   {% endif %}
@@ -330,7 +330,7 @@ function checkName(name) {
         // Nom exact déjà pris
         nameIsBlocked = true;
         fb.className   = 'name-feedback error';
-        fb.textContent = '⚠️ Ce prénom est déjà utilisé. Sélectionnez-le dans la liste ci-dessous ou choisissez un autre nom.';
+        fb.textContent = '⚠️ Profil déjà créé. Sélectionne un profil existant fada que tié ';
         // Afficher le profil existant comme suggestion cliquable
         const card = makeSimilarCard(data.exact, true);
         sug.appendChild(card);
@@ -339,11 +339,11 @@ function checkName(name) {
       } else if (data.similar && data.similar.length > 0) {
         // Similaires mais pas exact
         fb.className   = 'name-feedback warning';
-        fb.textContent = '🔍 Des profils similaires existent déjà — est-ce vous ?';
+        fb.textContent = '🔍 Des profils similaires existent déjà — tia oublié mon homme ? ';
         data.similar.forEach(p => sug.appendChild(makeSimilarCard(p, false)));
       } else {
         fb.className   = 'name-feedback ok';
-        fb.textContent = '✓ Prénom disponible !';
+        fb.textContent = '✓ Bucque disponible !';
       }
       updateRegisterBtn();
     });
