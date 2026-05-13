@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 
@@ -10,7 +10,6 @@ app.secret_key = os.environ.get('SECRET_KEY')
 # ── Database URL ───────────────────────────────────────────────────────────────
 _db_url = os.environ.get('DATABASE_URL')
 
-
 # Neon/Heroku fournissent parfois "postgres://" — SQLAlchemy 1.4+ exige "postgresql://"
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
@@ -18,8 +17,8 @@ if _db_url.startswith('postgres://'):
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,      # vérifie la connexion avant chaque requête
-    'pool_recycle': 300,        # recycle les connexions toutes les 5 min
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
 }
 
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
@@ -38,8 +37,7 @@ class Trip(db.Model):
 class Participant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    emoji = db.Column(db.String(10), default='👤')
-    avatar_url = db.Column(db.Text, default='')  # base64 data URL ou vide
+    emoji = db.Column(db.String(10), default='')  # vide = pas encore choisi
     votes = db.relationship('Vote', backref='participant', lazy=True, cascade='all, delete-orphan')
 
 class Proposal(db.Model):
@@ -48,9 +46,9 @@ class Proposal(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     price_per_person = db.Column(db.Float)
-    pros = db.Column(db.Text)  # JSON list
-    cons = db.Column(db.Text)  # JSON list
-    images = db.Column(db.Text)  # JSON list of URLs
+    pros = db.Column(db.Text)
+    cons = db.Column(db.Text)
+    images = db.Column(db.Text)
     address = db.Column(db.String(300))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
@@ -88,13 +86,30 @@ class Vote(db.Model):
 COLORS = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6','#EC4899','#14B8A6']
 ICONS  = ['🏠','🏡','🏔️','🌊','🏖️','🌲','🏙️','🗺️']
 
+COOKIE_NAME = 'tripvote_pid'
+COOKIE_DAYS = 30
+
 def get_trip():
     return Trip.query.first()
 
 def current_participant():
+    # 1. Vérifier la session Flask
     pid = session.get('participant_id')
     if pid:
-        return Participant.query.get(pid)
+        p = Participant.query.get(pid)
+        if p:
+            return p
+    # 2. Vérifier le cookie persistant
+    pid_cookie = request.cookies.get(COOKIE_NAME)
+    if pid_cookie:
+        try:
+            p = Participant.query.get(int(pid_cookie))
+            if p:
+                session['participant_id'] = p.id
+                session['is_admin'] = False
+                return p
+        except (ValueError, TypeError):
+            pass
     return None
 
 def is_admin():
@@ -105,28 +120,42 @@ def is_admin():
 
 @app.route('/')
 def index():
+    # Si déjà connecté (session ou cookie), rediriger direct vers le trip
+    participant = current_participant()
+    if participant:
+        return redirect(url_for('trip_view'))
+    if is_admin():
+        return redirect(url_for('admin_dashboard'))
+
     trip = get_trip()
     participants = Participant.query.all()
     return render_template('index.html', trip=trip, participants=participants,
-                           participant=current_participant(), is_admin=is_admin())
+                           participant=None, is_admin=False)
 
 @app.route('/join', methods=['POST'])
 def join():
     participant_id = request.form.get('participant_id')
     p = Participant.query.get(participant_id)
     if p:
-        avatar_data = request.form.get('avatar_data', '').strip()
-        chosen_emoji = request.form.get('chosen_emoji', '').strip()
-        if avatar_data and avatar_data.startswith('data:image'):
-            p.avatar_url = avatar_data
-            p.emoji = ''
-        elif chosen_emoji:
-            p.emoji = chosen_emoji
-            p.avatar_url = ''
-        db.session.commit()
+        # Emoji : seulement si c'est la première connexion (emoji vide)
+        if not p.emoji:
+            chosen_emoji = request.form.get('chosen_emoji', '').strip()
+            p.emoji = chosen_emoji if chosen_emoji else '👤'
+            db.session.commit()
+
         session['participant_id'] = p.id
         session['is_admin'] = False
-    return redirect(url_for('trip_view'))
+
+        resp = make_response(redirect(url_for('trip_view')))
+        resp.set_cookie(
+            COOKIE_NAME,
+            str(p.id),
+            max_age=int(timedelta(days=COOKIE_DAYS).total_seconds()),
+            httponly=True,
+            samesite='Lax'
+        )
+        return resp
+    return redirect(url_for('index'))
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -141,7 +170,18 @@ def admin_login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
+    resp = make_response(redirect(url_for('index')))
+    resp.delete_cookie(COOKIE_NAME)
+    return resp
+
+@app.route('/switch')
+def switch_profile():
+    """Permet de changer de profil (efface session + cookie et revient à l'écran de sélection)."""
+    session.pop('participant_id', None)
+    session['is_admin'] = False
+    resp = make_response(redirect(url_for('index')))
+    resp.delete_cookie(COOKIE_NAME)
+    return resp
 
 
 # ─── Routes: Trip View ────────────────────────────────────────────────────────
@@ -158,12 +198,10 @@ def trip_view():
     proposals = Proposal.query.filter_by(trip_id=trip.id).order_by(Proposal.created_at).all()
     participants = Participant.query.all()
 
-    # votes dict: proposal_id -> list of participant_ids
     votes_map = {}
     for prop in proposals:
         votes_map[prop.id] = [v.participant_id for v in prop.votes]
 
-    # build participant lookup dict for the template
     participants_by_id = {p.id: p for p in participants}
 
     my_votes = set()
@@ -172,7 +210,6 @@ def trip_view():
         my_votes = {v.proposal_id for v in Vote.query.filter_by(participant_id=participant.id).all()
                     if v.proposal_id in existing_ids}
 
-    # pre-compute vote counts for sorting in template
     vote_counts = {prop.id: len(votes_map[prop.id]) for prop in proposals}
     proposals_sorted = sorted(proposals, key=lambda p: vote_counts[p.id], reverse=True)
 
@@ -206,11 +243,8 @@ def vote(proposal_id):
     count = Vote.query.filter_by(proposal_id=proposal_id).count()
     voters = db.session.query(Participant).join(Vote).filter(Vote.proposal_id == proposal_id).all()
     def badge(v):
-        if v.avatar_url:
-            return f'<span class="voter-badge" title="{v.name}"><img src="{v.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></span>'
         return f'<span class="voter-badge" title="{v.name}">{v.emoji or "👤"}</span>'
     voters_html = ''.join([badge(v) for v in voters])
-
     return jsonify({'liked': liked, 'count': count, 'voters_html': voters_html})
 
 
@@ -268,9 +302,9 @@ def reset_all():
 def add_participant():
     if not is_admin(): return redirect(url_for('admin_login'))
     name = request.form.get('name', '').strip()
-    emoji = request.form.get('emoji', '👤')
+    # emoji vide : sera choisi par l'utilisateur à sa première connexion
     if name and not Participant.query.filter_by(name=name).first():
-        p = Participant(name=name, emoji=emoji)
+        p = Participant(name=name, emoji='')
         db.session.add(p)
         db.session.commit()
     return redirect(url_for('admin_dashboard'))
@@ -288,13 +322,13 @@ def edit_participant(pid):
     if not is_admin(): return redirect(url_for('admin_login'))
     p = Participant.query.get_or_404(pid)
     name = request.form.get('name', '').strip()
-    emoji = request.form.get('emoji', '👤').strip()
+    emoji = request.form.get('emoji', '').strip()
     if name:
         existing = Participant.query.filter_by(name=name).first()
         if not existing or existing.id == pid:
             p.name = name
-    if emoji:
-        p.emoji = emoji
+    # L'admin peut vider l'emoji pour forcer un re-choix à la prochaine connexion
+    p.emoji = emoji
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
@@ -307,14 +341,9 @@ def add_proposal():
     trip = get_trip()
     if not trip: return redirect(url_for('admin_dashboard'))
 
-    pros_raw = request.form.get('pros', '')
-    cons_raw = request.form.get('cons', '')
-    images_raw = request.form.get('images', '')
-
-    pros_list = [x.strip() for x in pros_raw.split('\n') if x.strip()]
-    cons_list = [x.strip() for x in cons_raw.split('\n') if x.strip()]
-    images_list = [x.strip() for x in images_raw.split('\n') if x.strip()]
-
+    pros_list = [x.strip() for x in request.form.get('pros', '').split('\n') if x.strip()]
+    cons_list = [x.strip() for x in request.form.get('cons', '').split('\n') if x.strip()]
+    images_list = [x.strip() for x in request.form.get('images', '').split('\n') if x.strip()]
     lat = request.form.get('latitude') or None
     lng = request.form.get('longitude') or None
 
@@ -381,7 +410,6 @@ def api_results():
     if not trip:
         return jsonify([])
     proposals = Proposal.query.filter_by(trip_id=trip.id).order_by(Proposal.created_at).all()
-    participants = Participant.query.all()
     result = []
     for prop in proposals:
         voters = db.session.query(Participant).join(Vote).filter(Vote.proposal_id == prop.id).all()
@@ -391,7 +419,7 @@ def api_results():
             'count': len(voters),
             'color': prop.color,
             'icon': prop.icon,
-            'voters': [{'name': v.name, 'emoji': v.emoji or '👤', 'avatar': v.avatar_url or ''} for v in voters]
+            'voters': [{'name': v.name, 'emoji': v.emoji or '👤', 'avatar': ''} for v in voters]
         })
     return jsonify(result)
 
