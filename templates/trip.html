@@ -2,6 +2,7 @@
 {% block title %}{{ trip.name }} — TripVote{% endblock %}
 
 {% block extra_head %}
+<script>const lbImages = {};</script>
 <style>
   .proposal-card { transition: all 0.25s; }
   .vote-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
@@ -337,7 +338,7 @@
 // ═══════════════════════════════════════════
 //  DATA
 // ═══════════════════════════════════════════
-const lbImages = {};  // populated by inline <script> tags next to each gallery
+
 
 // Voter data per proposal (injected from Jinja)
 const votersData = {
