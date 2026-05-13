@@ -1,8 +1,37 @@
 {% extends "base.html" %}
-{% block title %}TripVote — Choisissez votre identité{% endblock %}
+{% block title %}TripVote — Connexion{% endblock %}
 
 {% block extra_head %}
 <style>
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  /* ── Participant cards ── */
   .p-card {
     border: 1.5px solid var(--border);
     border-radius: 14px;
@@ -20,13 +49,12 @@
     font-size: 1.8rem;
     background: var(--surface2);
     border: 2px solid var(--border);
-    overflow: hidden;
     transition: border-color 0.2s;
   }
   .p-card.selected .avatar-display { border-color: var(--accent); }
-  .p-card .avatar-display img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
 
-  .avatar-picker {
+  /* ── Emoji picker (1ère connexion) ── */
+  .emoji-picker-box {
     display: none;
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -35,9 +63,9 @@
     margin-top: 14px;
     animation: fadeUp 0.2s ease both;
   }
-  .avatar-picker.open { display: block; }
+  .emoji-picker-box.open { display: block; }
 
-  .emoji-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 7px; }
   .emoji-opt {
     width: 38px; height: 38px; border-radius: 9px;
     border: 1.5px solid var(--border);
@@ -48,18 +76,21 @@
   .emoji-opt:hover { border-color: var(--accent); transform: scale(1.1); }
   .emoji-opt.chosen { border-color: var(--accent); background: rgba(110,231,183,0.15); }
 
-  .upload-zone {
-    border: 1.5px dashed var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .upload-zone:hover { border-color: var(--accent); background: rgba(110,231,183,0.04); }
+  /* ── New profile form ── */
+  .new-profile-form { display: none; }
+  .new-profile-form.open { display: block; }
 
-  .avatar-preview { display:none; margin-top:10px; text-align:center; }
-  .avatar-preview img { width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid var(--accent); }
+  /* ── Notice badge ── */
+  .notice {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(110,231,183,0.07);
+    border: 1px solid rgba(110,231,183,0.2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
 </style>
 {% endblock %}
 
@@ -81,72 +112,83 @@
       <span style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; color:var(--accent);">{{ trip.name }}</span>
     </div>
 
-    {% if participants %}
-    <h2 style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.1rem; margin-bottom:16px;">Qui êtes-vous ?</h2>
+    <!-- Onglets -->
+    <div class="tab-bar" role="tablist">
+      <button class="tab-btn active" id="tab-existing" onclick="showTab('existing')" type="button">
+        👤 Profil existant
+      </button>
+      <button class="tab-btn" id="tab-new" onclick="showTab('new')" type="button">
+        ✨ Nouveau profil
+      </button>
+    </div>
 
-    <form action="/join" method="POST" id="join-form">
-      <input type="hidden" name="participant_id" id="selected-pid">
-      <input type="hidden" name="chosen_emoji" id="chosen-emoji">
-      <input type="hidden" name="avatar_data" id="avatar-data">
+    <!-- ─ Onglet : sélectionner un profil existant ─ -->
+    <div id="panel-existing">
+      {% if participants %}
+      <h2 style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.05rem; margin-bottom:14px; color:var(--muted);">
+        Qui êtes-vous ?
+      </h2>
 
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:4px;">
-        {% for p in participants %}
-        <div class="p-card" id="pcard-{{ p.id }}"
-             onclick="selectParticipant({{ p.id }}, '{{ p.emoji or '👤' }}', {{ 'true' if p.avatar_url else 'false' }})">
-          <div class="avatar-display" id="avatar-display-{{ p.id }}">
-            {% if p.avatar_url %}
-              <img src="{{ p.avatar_url }}" alt="{{ p.name }}">
-            {% else %}
-              <span>{{ p.emoji or '👤' }}</span>
+      <form action="/join" method="POST" id="join-form">
+        <input type="hidden" name="participant_id" id="selected-pid">
+        <input type="hidden" name="chosen_emoji" id="chosen-emoji">
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:4px;">
+          {% for p in participants %}
+          <div class="p-card" id="pcard-{{ p.id }}"
+               onclick="selectParticipant({{ p.id }}, '{{ p.emoji or '' }}')">
+            <div class="avatar-display" id="avatar-display-{{ p.id }}">
+              <span>{{ p.emoji if p.emoji else '👤' }}</span>
+            </div>
+            <div style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.9rem;">{{ p.name }}</div>
+            {% if not p.emoji %}
+            <div style="font-size:0.7rem; color:var(--accent); margin-top:4px;">Choisir un emoji →</div>
             {% endif %}
           </div>
-          <div style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.9rem;">{{ p.name }}</div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Avatar picker (revealed on selection) -->
-      <div class="avatar-picker" id="avatar-picker">
-        <p style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; margin-bottom:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em;">
-          Personnalisez votre avatar
-        </p>
-
-        <div class="emoji-grid" id="emoji-grid">
-          {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
-          <div class="emoji-opt" onclick="pickEmoji('{{ e }}', this)">{{ e }}</div>
           {% endfor %}
         </div>
 
-        <div style="font-size:0.78rem; color:var(--muted); text-align:center; margin-bottom:8px;">— ou uploadez une photo —</div>
-
-        <div class="upload-zone" onclick="document.getElementById('photo-input').click()">
-          <div style="font-size:1.3rem; margin-bottom:3px;">📷</div>
-          <div style="font-size:0.8rem; color:var(--muted);">Choisir une photo</div>
+        <!-- Emoji picker : affiché uniquement si c'est la 1ère connexion du profil sélectionné -->
+        <div class="emoji-picker-box" id="emoji-picker-box">
+          <p style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.82rem; margin-bottom:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em;">
+            Choisissez votre emoji — une seule fois !
+          </p>
+          <div class="emoji-grid" id="emoji-grid">
+            {% for e in ['😀','😎','🤩','🥳','🧑‍🚀','🦊','🐼','🐸','🦁','🐯','🐻','🦄','🌵','🍕','🎸','⚽','🏄','🎭','🌈','🔥','💎','🚀','🎯','🌊'] %}
+            <div class="emoji-opt" onclick="pickEmoji('{{ e }}', this)">{{ e }}</div>
+            {% endfor %}
+          </div>
         </div>
-        <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event)">
 
-        <div class="avatar-preview" id="avatar-preview">
-          <img id="avatar-preview-img" src="" alt="preview">
-          <p style="font-size:0.78rem; color:var(--accent); margin-top:6px; font-family:'Syne',sans-serif; font-weight:600;">✓ Photo sélectionnée</p>
-          <button type="button" onclick="clearPhoto()"
-            style="font-size:0.75rem; color:var(--muted); background:none; border:none; cursor:pointer; text-decoration:underline;">
-            Supprimer
-          </button>
-        </div>
+        <button type="submit" id="join-btn" class="btn-primary"
+          style="width:100%; text-align:center; margin-top:16px; opacity:0.4; pointer-events:none; transition:opacity 0.2s;">
+          Rejoindre le trip →
+        </button>
+      </form>
+
+      {% else %}
+      <p style="color:var(--muted); text-align:center; padding:20px 0;">
+        Aucun participant défini.<br>
+        <span style="font-size:0.85rem;">L'admin doit d'abord ajouter les participants.</span>
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- ─ Onglet : nouveau profil ─ -->
+    <div id="panel-new" style="display:none;">
+      <div class="notice">
+        <span style="font-size:1.1rem;">ℹ️</span>
+        <span>Les profils sont créés par l'administrateur du trip. Si votre nom n'apparaît pas dans la liste, contactez l'admin pour qu'il vous ajoute.</span>
       </div>
+      <div style="text-align:center; padding: 16px 0 8px;">
+        <div style="font-size:2rem; margin-bottom:10px;">🔒</div>
+        <p style="color:var(--muted); font-size:0.9rem; line-height:1.6;">
+          Besoin d'être ajouté ?<br>
+          <a href="/admin/login" style="color:var(--accent); font-weight:600; text-decoration:none;">Accès admin →</a>
+        </p>
+      </div>
+    </div>
 
-      <button type="submit" id="join-btn" class="btn-primary"
-        style="width:100%; text-align:center; margin-top:16px; opacity:0.4; pointer-events:none; transition:opacity 0.2s;">
-        Rejoindre le trip →
-      </button>
-    </form>
-
-    {% else %}
-    <p style="color:var(--muted); text-align:center; padding:20px 0;">
-      Aucun participant défini.<br>
-      <span style="font-size:0.85rem;">L'admin doit d'abord ajouter les participants.</span>
-    </p>
-    {% endif %}
   </div>
 
   {% else %}
@@ -161,104 +203,67 @@
 </div>
 
 <script>
-let currentPid = null;
-
-// Default emoji per participant (stored so we can restore on clearPhoto)
-const defaults = {
+// Données des participants : emoji vide = première connexion
+const participantEmojis = {
   {% for p in participants %}
-  {{ p.id }}: '{{ p.emoji or '👤' }}',
+  {{ p.id }}: {{ '"' + p.emoji + '"' if p.emoji else '""' }},
   {% endfor %}
 };
 
-function selectParticipant(pid, defaultEmoji, hasAvatar) {
+let currentPid = null;
+let currentIsFirst = false;
+
+function showTab(tab) {
+  document.getElementById('panel-existing').style.display = tab === 'existing' ? 'block' : 'none';
+  document.getElementById('panel-new').style.display = tab === 'new' ? 'block' : 'none';
+  document.getElementById('tab-existing').classList.toggle('active', tab === 'existing');
+  document.getElementById('tab-new').classList.toggle('active', tab === 'new');
+}
+
+function selectParticipant(pid, existingEmoji) {
   document.querySelectorAll('.p-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('pcard-' + pid).classList.add('selected');
   currentPid = pid;
 
   document.getElementById('selected-pid').value = pid;
-  document.getElementById('avatar-picker').classList.add('open');
 
-  // Reset picker state
-  clearPhoto(false);
-  document.getElementById('avatar-data').value = '';
+  const isFirst = !existingEmoji;
+  currentIsFirst = isFirst;
 
-  // Pre-highlight current emoji (unless they have a photo)
-  if (!hasAvatar) {
-    document.querySelectorAll('.emoji-opt').forEach(el => {
-      el.classList.toggle('chosen', el.textContent.trim() === defaultEmoji);
-    });
-    document.getElementById('chosen-emoji').value = defaultEmoji;
-  } else {
+  const pickerBox = document.getElementById('emoji-picker-box');
+  const joinBtn = document.getElementById('join-btn');
+
+  if (isFirst) {
+    // Première connexion : doit choisir un emoji
+    pickerBox.classList.add('open');
     document.querySelectorAll('.emoji-opt').forEach(el => el.classList.remove('chosen'));
+    document.getElementById('chosen-emoji').value = '';
+    // Bouton désactivé jusqu'au choix d'emoji
+    joinBtn.style.opacity = '0.4';
+    joinBtn.style.pointerEvents = 'none';
+  } else {
+    // Connexion suivante : emoji déjà fixé, on peut rejoindre directement
+    pickerBox.classList.remove('open');
+    document.getElementById('chosen-emoji').value = existingEmoji;
+    joinBtn.style.opacity = '1';
+    joinBtn.style.pointerEvents = 'auto';
   }
-
-  // Unlock join button
-  const btn = document.getElementById('join-btn');
-  btn.style.opacity = '1';
-  btn.style.pointerEvents = 'auto';
 }
 
 function pickEmoji(emoji, el) {
-  clearPhoto(false);
   document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('chosen'));
   el.classList.add('chosen');
   document.getElementById('chosen-emoji').value = emoji;
-  document.getElementById('avatar-data').value = '';
 
-  // Live update the card
+  // Mise à jour live de la carte
   if (currentPid) {
-    const disp = document.getElementById('avatar-display-' + currentPid);
-    disp.innerHTML = '<span>' + emoji + '</span>';
+    document.getElementById('avatar-display-' + currentPid).innerHTML = '<span>' + emoji + '</span>';
   }
-}
 
-function handlePhotoUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      // Crop & resize to 200×200
-      const canvas = document.createElement('canvas');
-      canvas.width = 200; canvas.height = 200;
-      const ctx = canvas.getContext('2d');
-      const min = Math.min(img.width, img.height);
-      const sx = (img.width - min) / 2, sy = (img.height - min) / 2;
-      ctx.drawImage(img, sx, sy, min, min, 0, 0, 200, 200);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-
-      // Show preview
-      document.getElementById('avatar-preview-img').src = dataUrl;
-      document.getElementById('avatar-preview').style.display = 'block';
-      document.querySelectorAll('.emoji-opt').forEach(e => e.classList.remove('chosen'));
-      document.getElementById('avatar-data').value = dataUrl;
-      document.getElementById('chosen-emoji').value = '';
-
-      // Live update card
-      if (currentPid) {
-        const disp = document.getElementById('avatar-display-' + currentPid);
-        disp.innerHTML = '<img src="' + dataUrl + '">';
-      }
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearPhoto(restoreEmoji = true) {
-  document.getElementById('avatar-data').value = '';
-  document.getElementById('avatar-preview').style.display = 'none';
-  document.getElementById('photo-input').value = '';
-  if (restoreEmoji && currentPid) {
-    const emoji = defaults[currentPid] || '👤';
-    document.getElementById('chosen-emoji').value = emoji;
-    document.querySelectorAll('.emoji-opt').forEach(el => {
-      el.classList.toggle('chosen', el.textContent.trim() === emoji);
-    });
-    const disp = document.getElementById('avatar-display-' + currentPid);
-    disp.innerHTML = '<span>' + emoji + '</span>';
-  }
+  // Activer le bouton
+  const joinBtn = document.getElementById('join-btn');
+  joinBtn.style.opacity = '1';
+  joinBtn.style.pointerEvents = 'auto';
 }
 </script>
 {% endblock %}
