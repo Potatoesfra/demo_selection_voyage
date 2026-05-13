@@ -419,7 +419,7 @@ function openVotersOverlay(proposalId) {
   title.textContent = data.title + ' — ' + data.voters.length + ' vote' + (data.voters.length !== 1 ? 's' : '');
 
   if (data.voters.length === 0) {
-    list.innerHTML = "<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun vote pour l'instant.</p>";
+    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun vote pour le moment.</p>';
   } else {
     list.innerHTML = data.voters.map(v => `
       <div class="voter-row">
