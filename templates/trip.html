@@ -10,6 +10,59 @@
   .tab-btn.active { background: var(--accent); color: #0D0F14; }
   .tab-btn:not(.active) { background: transparent; color: var(--muted); }
   .tab-btn:not(.active):hover { color: var(--text); }
+
+  /* ── Voters overlay ── */
+  .voters-overlay {
+    display: none; position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+  }
+  .voters-overlay.open { display: flex; }
+  .voters-overlay-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px;
+    min-width: 300px; max-width: 420px; width: 90%;
+    max-height: 80vh; overflow-y: auto;
+    animation: fadeUp 0.22s ease both;
+  }
+  .voter-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .voter-row:last-child { border-bottom: none; }
+  .voter-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; flex-shrink: 0;
+  }
+  .see-votes-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 0.78rem;
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    padding: 4px 0; transition: color 0.15s;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .see-votes-btn:hover { color: var(--accent); }
+
+  /* ── Lightbox nav ── */
+  .lb-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: white; font-size: 1.4rem; cursor: pointer;
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s; z-index: 2;
+  }
+  .lb-arrow:hover { background: rgba(255,255,255,0.22); }
+  .lb-arrow.left  { left: 18px; }
+  .lb-arrow.right { right: 18px; }
+  .lb-arrow:disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+  .lb-counter {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.6); font-size: 0.82rem;
+    font-family: 'Syne', sans-serif; font-weight: 600; pointer-events: none;
+  }
 </style>
 {% endblock %}
 
@@ -53,14 +106,17 @@
       <!-- Image gallery -->
       {% set images = prop.get_images() %}
       {% if images %}
-      <div class="gallery" style="padding:12px 12px 0;">
+      <div class="gallery" style="padding:12px 12px 0;"
+           data-prop-id="{{ prop.id }}">
         {% for img in images %}
         <img src="{{ img }}" alt="photo"
-             onclick="openLightbox('{{ img }}')"
+             onclick="openLightboxAt({{ loop.index0 }}, 'prop-{{ prop.id }}')"
              style="cursor:zoom-in;"
              onerror="this.style.display='none'">
         {% endfor %}
       </div>
+      {# JSON list of images for lightbox navigation #}
+      <script>lbImages['prop-{{ prop.id }}'] = [{% for img in images %}'{{ img }}',{% endfor %}];</script>
       {% endif %}
 
       <div style="padding:18px;">
@@ -119,16 +175,12 @@
         </div>
 
         <!-- Voters -->
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
           <div id="voters-{{ prop.id }}" style="display:flex; gap:4px; flex-wrap:wrap;">
             {% for pid in votes_map[prop.id] %}
               {% set voter = participants_by_id.get(pid) %}
               {% if voter %}
-                <span class="voter-badge" title="{{ voter.name }}">
-                  
-                    {{ voter.emoji or '👤' }}
-                  
-                </span>
+                <span class="voter-badge" title="{{ voter.name }}">{{ voter.emoji or '👤' }}</span>
               {% endif %}
             {% endfor %}
           </div>
@@ -136,6 +188,15 @@
             {{ vote_count }} like{{ 's' if vote_count != 1 }}
           </span>
         </div>
+        {% if vote_count > 0 %}
+        <div style="margin-bottom:14px;">
+          <button class="see-votes-btn" onclick="openVotersOverlay({{ prop.id }})">
+            👁 Voir qui a voté ({{ vote_count }})
+          </button>
+        </div>
+        {% else %}
+        <div style="margin-bottom:14px;"></div>
+        {% endif %}
 
         <!-- Actions -->
         <div style="display:flex; align-items:center; gap:10px;">
@@ -223,44 +284,176 @@
   </div>
 </div>
 
-<!-- ═══ LIGHTBOX ═══ -->
+<!-- ═══ LIGHTBOX (avec navigation) ═══ -->
 <div id="lightbox" onclick="closeLightbox()" style="
   display:none; position:fixed; inset:0; z-index:9999;
   background:rgba(0,0,0,0.92); backdrop-filter:blur(8px);
   align-items:center; justify-content:center; cursor:zoom-out;
 ">
+  <!-- Fermer -->
   <button onclick="event.stopPropagation(); closeLightbox()" style="
     position:absolute; top:20px; right:24px;
     background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
     color:white; font-size:1.4rem; cursor:pointer; line-height:1;
     width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
   ">✕</button>
+
+  <!-- Flèche gauche -->
+  <button class="lb-arrow left" id="lb-prev" onclick="event.stopPropagation(); lbNav(-1)" title="Précédente">&#8592;</button>
+
+  <!-- Image -->
   <img id="lightbox-img" src="" onclick="event.stopPropagation()" style="
-    max-width:92vw; max-height:88vh;
+    max-width:80vw; max-height:84vh;
     border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.6);
-    object-fit:contain; transition: opacity 0.2s;
+    object-fit:contain; transition: opacity 0.18s;
   ">
+
+  <!-- Flèche droite -->
+  <button class="lb-arrow right" id="lb-next" onclick="event.stopPropagation(); lbNav(1)" title="Suivante">&#8594;</button>
+
+  <!-- Compteur  -->
+  <div class="lb-counter" id="lb-counter"></div>
+</div>
+
+<!-- ═══ VOTERS OVERLAY ═══ -->
+<div class="voters-overlay" id="voters-overlay" onclick="closeVotersOverlay()">
+  <div class="voters-overlay-box" onclick="event.stopPropagation()">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+      <h3 id="voters-overlay-title" style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.05rem;"></h3>
+      <button onclick="closeVotersOverlay()" style="
+        background:var(--surface2); border:1px solid var(--border);
+        color:var(--muted); width:32px; height:32px; border-radius:50%;
+        cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;
+      ">✕</button>
+    </div>
+    <div id="voters-overlay-list"></div>
+  </div>
 </div>
 
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLightbox(src) {
+// ═══════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════
+const lbImages = {};  // populated by inline <script> tags next to each gallery
+
+// Voter data per proposal (injected from Jinja)
+const votersData = {
+  {% for prop in proposals %}
+  {{ prop.id }}: {
+    title: {{ (prop.icon + ' ' + prop.title)|tojson }},
+    voters: [
+      {% for pid in votes_map[prop.id] %}
+        {% set voter = participants_by_id.get(pid) %}
+        {% if voter %}
+          { name: {{ voter.name|tojson }}, emoji: {{ (voter.emoji or '👤')|tojson }} },
+        {% endif %}
+      {% endfor %}
+    ]
+  },
+  {% endfor %}
+};
+
+// ═══════════════════════════════════════════
+//  LIGHTBOX
+// ═══════════════════════════════════════════
+let lbKey   = null;   // current gallery key
+let lbIndex = 0;      // current image index
+
+function openLightboxAt(idx, key) {
+  lbKey   = key;
+  lbIndex = idx;
+  renderLightbox();
   const lb = document.getElementById('lightbox');
-  const img = document.getElementById('lightbox-img');
-  img.src = src;
   lb.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
+
+function renderLightbox() {
+  const imgs = lbImages[lbKey] || [];
+  const img  = document.getElementById('lightbox-img');
+  const prev = document.getElementById('lb-prev');
+  const next = document.getElementById('lb-next');
+  const ctr  = document.getElementById('lb-counter');
+
+  img.style.opacity = '0';
+  setTimeout(() => {
+    img.src = imgs[lbIndex] || '';
+    img.style.opacity = '1';
+  }, 80);
+
+  prev.disabled = lbIndex <= 0;
+  next.disabled = lbIndex >= imgs.length - 1;
+
+  if (imgs.length > 1) {
+    ctr.textContent = (lbIndex + 1) + ' / ' + imgs.length;
+  } else {
+    ctr.textContent = '';
+  }
+}
+
+function lbNav(dir) {
+  const imgs = lbImages[lbKey] || [];
+  lbIndex = Math.max(0, Math.min(imgs.length - 1, lbIndex + dir));
+  renderLightbox();
+}
+
 function closeLightbox() {
   document.getElementById('lightbox').style.display = 'none';
   document.body.style.overflow = '';
+  lbKey = null;
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════
+//  VOTERS OVERLAY
+// ═══════════════════════════════════════════
+function openVotersOverlay(proposalId) {
+  const data  = votersData[proposalId];
+  const overlay = document.getElementById('voters-overlay');
+  const title   = document.getElementById('voters-overlay-title');
+  const list    = document.getElementById('voters-overlay-list');
+
+  title.textContent = data.title + ' — ' + data.voters.length + ' vote' + (data.voters.length !== 1 ? 's' : '');
+
+  if (data.voters.length === 0) {
+    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun vote pour l'instant.</p>';
+  } else {
+    list.innerHTML = data.voters.map(v => `
+      <div class="voter-row">
+        <div class="voter-avatar">${v.emoji}</div>
+        <span style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.95rem;">${v.name}</span>
+      </div>`).join('');
+  }
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeVotersOverlay() {
+  document.getElementById('voters-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════════
+//  KEYBOARD
+// ═══════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (document.getElementById('lightbox').style.display !== 'none') {
+    if (e.key === 'Escape')      closeLightbox();
+    if (e.key === 'ArrowLeft')   lbNav(-1);
+    if (e.key === 'ArrowRight')  lbNav(1);
+    return;
+  }
+  if (document.getElementById('voters-overlay').classList.contains('open')) {
+    if (e.key === 'Escape') closeVotersOverlay();
+  }
+});
+
+// ═══════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════
 function showTab(name, btn) {
   ['proposals','results','map'].forEach(t => {
     document.getElementById('tab-'+t).style.display = 'none';
@@ -272,11 +465,13 @@ function showTab(name, btn) {
   if (name === 'results') fetchResults();
 }
 
-// ── Vote ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════
+//  VOTE
+// ═══════════════════════════════════════════
 async function doVote(proposalId, btn) {
   btn.disabled = true;
   try {
-    const res = await fetch(`/vote/${proposalId}`, { method: 'POST' });
+    const res  = await fetch(`/vote/${proposalId}`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
       const heart = btn.querySelector('.heart');
@@ -287,21 +482,43 @@ async function doVote(proposalId, btn) {
       heart.classList.add('pop');
       setTimeout(() => heart.classList.remove('pop'), 300);
 
-      // Update count
       const countEl = document.getElementById(`count-${proposalId}`);
       if (countEl) countEl.textContent = `${data.count} like${data.count !== 1 ? 's' : ''}`;
 
-      // Update voters
       const votersEl = document.getElementById(`voters-${proposalId}`);
       if (votersEl) votersEl.innerHTML = data.voters_html;
+
+      // Update see-votes button text
+      const seeBtn = document.querySelector(`[onclick="openVotersOverlay(${proposalId})"]`);
+      if (seeBtn) {
+        if (data.count > 0) {
+          seeBtn.textContent = '👁 Voir qui a voté (' + data.count + ')';
+          seeBtn.parentElement.style.display = '';
+        } else {
+          seeBtn.parentElement.style.display = 'none';
+        }
+      }
+
+      // Update votersData in memory
+      if (votersData[proposalId]) {
+        // Re-parse voters_html badges to rebuild the list
+        const tmp = document.createElement('div');
+        tmp.innerHTML = data.voters_html;
+        votersData[proposalId].voters = Array.from(tmp.querySelectorAll('.voter-badge')).map(el => ({
+          emoji: el.textContent.trim(),
+          name: el.getAttribute('title') || ''
+        }));
+      }
     }
   } catch(e) { console.error(e); }
   btn.disabled = false;
 }
 
-// ── Live results polling ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════
+//  LIVE RESULTS POLLING
+// ═══════════════════════════════════════════
 async function fetchResults() {
-  const res = await fetch('/api/results');
+  const res  = await fetch('/api/results');
   const data = await res.json();
   const total = {{ participants|length }};
   const container = document.getElementById('results-list');
@@ -310,12 +527,7 @@ async function fetchResults() {
   const sorted = [...data].sort((a,b) => b.count - a.count);
   container.innerHTML = sorted.map(p => {
     const pct = total > 0 ? Math.round(p.count / total * 100) : 0;
-    const voters = p.voters.map(v => {
-      const inner = v.avatar
-        ? `<img src="${v.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
-        : v.emoji;
-      return `<span class="voter-badge" title="${v.name}">${inner}</span>`;
-    }).join('');
+    const voters = p.voters.map(v => `<span class="voter-badge" title="${v.name}">${v.emoji}</span>`).join('');
     return `
       <div style="margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
@@ -338,7 +550,9 @@ setInterval(() => {
   if (document.getElementById('tab-results').style.display !== 'none') fetchResults();
 }, 5000);
 
-// ── Map ───────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════
+//  MAP
+// ═══════════════════════════════════════════
 let mapInitialized = false;
 let leafletMap;
 
@@ -348,54 +562,31 @@ async function initMap() {
 
   leafletMap = L.map('map', { zoomControl: true });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 18,
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
   }).addTo(leafletMap);
 
   const res = await fetch('/api/proposals/map');
   const proposals = await res.json();
 
-  if (proposals.length === 0) {
-    leafletMap.setView([46.5, 2.3], 5);
-    return;
-  }
+  if (proposals.length === 0) { leafletMap.setView([46.5, 2.3], 5); return; }
 
   const bounds = [];
   proposals.forEach(p => {
     bounds.push([p.lat, p.lng]);
-
-    // Custom emoji marker
     const icon = L.divIcon({
       className: '',
-      html: `
-        <div style="
-          background:${p.color};
-          border: 3px solid white;
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          width: 40px; height: 40px;
-          display:flex; align-items:center; justify-content:center;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-        ">
-          <span style="transform:rotate(45deg); font-size:1.1rem;">${p.icon}</span>
-        </div>`,
-      iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -44],
+      html: `<div style="background:${p.color};border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);width:40px;height:40px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.4);"><span style="transform:rotate(45deg);font-size:1.1rem;">${p.icon}</span></div>`,
+      iconSize: [40,40], iconAnchor: [20,40], popupAnchor: [0,-44],
     });
-
-    const popup = `
-      <div style="font-family:'DM Sans',sans-serif; min-width:180px;">
-        <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; margin-bottom:4px;">${p.icon} ${p.title}</div>
-        ${p.address ? `<div style="color:#888; font-size:0.8rem; margin-bottom:6px;">📍 ${p.address}</div>` : ''}
-        ${p.price ? `<div style="color:#6EE7B7; font-weight:600; font-size:0.85rem; margin-bottom:4px;">${Math.round(p.price)}€ / pers.</div>` : ''}
-        <div style="color:#EF4444; font-size:0.85rem;">❤️ ${p.votes} vote${p.votes !== 1 ? 's' : ''}</div>
-      </div>`;
-
+    const popup = `<div style="font-family:'DM Sans',sans-serif;min-width:180px;">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.95rem;margin-bottom:4px;">${p.icon} ${p.title}</div>
+      ${p.address ? `<div style="color:#888;font-size:0.8rem;margin-bottom:6px;">📍 ${p.address}</div>` : ''}
+      ${p.price ? `<div style="color:#6EE7B7;font-weight:600;font-size:0.85rem;margin-bottom:4px;">${Math.round(p.price)}€ / pers.</div>` : ''}
+      <div style="color:#EF4444;font-size:0.85rem;">❤️ ${p.votes} vote${p.votes !== 1 ? 's' : ''}</div>
+    </div>`;
     L.marker([p.lat, p.lng], { icon }).addTo(leafletMap).bindPopup(popup);
   });
-
-  leafletMap.fitBounds(bounds, { padding: [40, 40] });
+  leafletMap.fitBounds(bounds, { padding: [40,40] });
 }
 </script>
 {% endblock %}
