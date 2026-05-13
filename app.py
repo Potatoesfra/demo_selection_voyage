@@ -174,6 +174,77 @@ def logout():
     resp.delete_cookie(COOKIE_NAME)
     return resp
 
+
+@app.route('/api/check-name')
+def check_name():
+    """Vérifie si un nom est déjà pris et retourne les profils similaires."""
+    name = request.args.get('name', '').strip().lower()
+    if not name:
+        return jsonify({'available': False, 'similar': []})
+
+    participants = Participant.query.all()
+    exact = None
+    similar = []
+    for p in participants:
+        p_lower = p.name.lower()
+        if p_lower == name:
+            exact = {'id': p.id, 'name': p.name, 'emoji': p.emoji or '👤'}
+        elif name in p_lower or p_lower in name or _similarity(name, p_lower) > 0.6:
+            similar.append({'id': p.id, 'name': p.name, 'emoji': p.emoji or '👤'})
+
+    if exact:
+        return jsonify({'available': False, 'exact': exact, 'similar': similar})
+    return jsonify({'available': True, 'similar': similar})
+
+def _similarity(a, b):
+    """Score de similarité simple basé sur les caractères communs."""
+    if not a or not b:
+        return 0
+    longer = a if len(a) >= len(b) else b
+    shorter = b if len(a) >= len(b) else a
+    matches = sum(1 for c in shorter if c in longer)
+    return matches / len(longer)
+
+@app.route('/register', methods=['POST'])
+def register():
+    """Crée un nouveau profil et connecte l utilisateur directement."""
+    name = request.form.get('name', '').strip()
+    chosen_emoji = request.form.get('chosen_emoji', '').strip()
+
+    if not name:
+        return redirect(url_for('index'))
+
+    # Vérification exacte (insensible à la casse)
+    existing = Participant.query.filter(
+        db.func.lower(Participant.name) == name.lower()
+    ).first()
+
+    if existing:
+        # Nom déjà pris : reconnecter sur ce profil
+        if not existing.emoji and chosen_emoji:
+            existing.emoji = chosen_emoji
+            db.session.commit()
+        session['participant_id'] = existing.id
+        session['is_admin'] = False
+        resp = make_response(redirect(url_for('trip_view')))
+        resp.set_cookie(COOKIE_NAME, str(existing.id),
+                        max_age=int(30 * 86400),
+                        httponly=True, samesite='Lax')
+        return resp
+
+    # Nouveau profil
+    p = Participant(name=name, emoji=chosen_emoji if chosen_emoji else '👤')
+    db.session.add(p)
+    db.session.commit()
+
+    session['participant_id'] = p.id
+    session['is_admin'] = False
+    resp = make_response(redirect(url_for('trip_view')))
+    resp.set_cookie(COOKIE_NAME, str(p.id),
+                    max_age=int(30 * 86400),
+                    httponly=True, samesite='Lax')
+    return resp
+
 @app.route('/switch')
 def switch_profile():
     """Permet de changer de profil (efface session + cookie et revient à l'écran de sélection)."""
