@@ -617,29 +617,9 @@ def _fmt_duration_range(seconds):
         return f"Approx. {h}-{h+1}h"
 
 def _nearest_station(dest_lat, dest_lng):
-    """Trouve la gare la plus proche via Nominatim."""
+    """Trouve la gare la plus proche via Nominatim avec viewbox centré sur la destination."""
     import urllib.request, urllib.parse, math
-    query = f"gare ferroviaire near {dest_lat},{dest_lng}"
-    url = (f"https://nominatim.openstreetmap.org/search"
-           f"?format=json&q={urllib.parse.quote(query)}"
-           f"&limit=5&countrycodes=fr,es,it,de,be,ch,pt")
-    req = urllib.request.Request(url, headers={'User-Agent': 'TripVote/1.0'})
-    with urllib.request.urlopen(req, timeout=6) as r:
-        results = json.loads(r.read())
 
-    if not results:
-        # Fallback: recherche directe "railway station"
-        url2 = (f"https://nominatim.openstreetmap.org/search"
-                f"?format=json&q=railway+station"
-                f"&lat={dest_lat}&lon={dest_lng}&limit=5")
-        req2 = urllib.request.Request(url2, headers={'User-Agent': 'TripVote/1.0'})
-        with urllib.request.urlopen(req2, timeout=6) as r2:
-            results = json.loads(r2.read())
-
-    if not results:
-        return None, None
-
-    # Trouver le résultat le plus proche géographiquement
     def haversine(lat1, lng1, lat2, lng2):
         R = 6371
         dlat = math.radians(lat2 - lat1)
@@ -647,10 +627,34 @@ def _nearest_station(dest_lat, dest_lng):
         a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng/2)**2
         return R * 2 * math.asin(math.sqrt(a))
 
-    best = min(results, key=lambda r: haversine(dest_lat, dest_lng, float(r['lat']), float(r['lon'])))
-    name = best.get('display_name', '').split(',')[0].strip()
-    dist = round(haversine(dest_lat, dest_lng, float(best['lat']), float(best['lon'])), 1)
-    return name, dist
+    # Recherche dans un rayon progressif autour de la destination
+    for radius_deg in [0.5, 1.5, 3.0]:
+        bbox = (
+            dest_lng - radius_deg,  # left
+            dest_lat - radius_deg,  # bottom
+            dest_lng + radius_deg,  # right
+            dest_lat + radius_deg,  # top
+        )
+        url = (
+            f"https://nominatim.openstreetmap.org/search"
+            f"?format=json"
+            f"&q=railway+station"
+            f"&viewbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+            f"&bounded=1"
+            f"&limit=10"
+        )
+        req = urllib.request.Request(url, headers={'User-Agent': 'TripVote/1.0'})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            results = json.loads(r.read())
+
+        if results:
+            # Garder uniquement les résultats vraiment proches (type station/railway)
+            best = min(results, key=lambda r: haversine(dest_lat, dest_lng, float(r['lat']), float(r['lon'])))
+            name = best.get('display_name', '').split(',')[0].strip()
+            dist = round(haversine(dest_lat, dest_lng, float(best['lat']), float(best['lon'])), 1)
+            return name, dist
+
+    return None, None
 
 
 @app.route('/api/travel-times')
