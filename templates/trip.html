@@ -432,13 +432,13 @@
   <div class="veto-confirm-box" onclick="event.stopPropagation()">
     <div style="font-size:2.5rem; margin-bottom:12px;">💀</div>
     <h3 style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.15rem; margin-bottom:12px; color:#EF4444;">
-      Véto absolu !
+      Pas si vite minot, Contre-uno : Véto !
     </h3>
     <p style="color:var(--muted); font-size:0.9rem; line-height:1.6; margin-bottom:8px;">
-      Si cette proposition est choisie, tu confirms que tu <strong style="color:var(--text);">ne viendras pas</strong>.
+      Si cette proposition est choisie, tu penses que tu <strong style="color:var(--text);">ne viendras pas</strong> (du coup on privilégiera une autre loc).
     </p>
     <p style="color:#EF444499; font-size:0.83rem; margin-bottom:24px; font-family:'Syne',sans-serif; font-weight:600;">
-      ⚠️ Tu ne peux utiliser ce NON qu'une seule fois au total.<br>Tu peux l'enlever en recliquant dessus si tu veux le déplacer.
+      ⚠️ Tu ne peux utiliser ce NON qu'une seule fois au total.<br>Tu peux l'enlever en recliquant dessus si tu veux le déplacer t'inquiète.
     </p>
     <div style="display:flex; gap:12px; justify-content:center;">
       <button onclick="cancelVeto()" style="
@@ -600,13 +600,13 @@ function openVetoersOverlay(proposalId) {
 
   title.innerHTML = `
     <div style="font-size:0.9rem; color:#EF444499; margin-bottom:4px;">
-        <span style="display:block;">💀 Les récalcitrants</span>
+        <span style="display:block;">💀 Les bornés </span>
     </div>
     <div>${data.title} — ${data.vetoers.length} NON${data.vetoers.length !== 1 ? '' : ''}</div>
   `;
 
   if (data.vetoers.length === 0) {
-    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun véto pour le moment.</p>';
+    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;"> Pixel, aucun véto pour le moment.</p>';
   } else {
     list.innerHTML = data.vetoers.map(v => `
       <div class="voter-row">
