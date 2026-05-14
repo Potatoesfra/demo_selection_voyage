@@ -80,6 +80,14 @@ class Vote(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint('proposal_id', 'participant_id'),)
 
+class Veto(db.Model):
+    """Un participant peut mettre un seul véto sur une proposition."""
+    id = db.Column(db.Integer, primary_key=True)
+    proposal_id = db.Column(db.Integer, db.ForeignKey('proposal.id'), nullable=False)
+    participant_id = db.Column(db.Integer, db.ForeignKey('participant.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('proposal_id', 'participant_id'),)
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -284,12 +292,25 @@ def trip_view():
     vote_counts = {prop.id: len(votes_map[prop.id]) for prop in proposals}
     proposals_sorted = sorted(proposals, key=lambda p: vote_counts[p.id], reverse=True)
 
+    # Vetos
+    vetos_map = {}
+    for prop in proposals:
+        vetos_map[prop.id] = [v.participant_id for v in Veto.query.filter_by(proposal_id=prop.id).all()]
+    veto_counts = {prop.id: len(vetos_map[prop.id]) for prop in proposals}
+    my_veto_proposal_id = None
+    if participant:
+        my_v = Veto.query.filter_by(participant_id=participant.id).first()
+        if my_v:
+            my_veto_proposal_id = my_v.proposal_id
+
     return render_template('trip.html', trip=trip, proposals=proposals,
                            proposals_sorted=proposals_sorted,
                            participants=participants, participant=participant,
                            is_admin=is_admin(), votes_map=votes_map,
                            my_votes=my_votes, participants_by_id=participants_by_id,
-                           vote_counts=vote_counts)
+                           vote_counts=vote_counts,
+                           vetos_map=vetos_map, veto_counts=veto_counts,
+                           my_veto_proposal_id=my_veto_proposal_id)
 
 
 # ─── Routes: Voting ───────────────────────────────────────────────────────────
@@ -317,6 +338,40 @@ def vote(proposal_id):
         return f'<span class="voter-badge" title="{v.name}">{v.emoji or "👤"}</span>'
     voters_html = ''.join([badge(v) for v in voters])
     return jsonify({'liked': liked, 'count': count, 'voters_html': voters_html})
+
+
+# ─── Routes: Veto ─────────────────────────────────────────────────────────────
+
+@app.route('/veto/<int:proposal_id>', methods=['POST'])
+def veto(proposal_id):
+    participant = current_participant()
+    if not participant:
+        return jsonify({'error': 'not logged in'}), 403
+
+    existing_veto_on_this = Veto.query.filter_by(proposal_id=proposal_id, participant_id=participant.id).first()
+
+    if existing_veto_on_this:
+        # Retirer le véto de cette proposition
+        db.session.delete(existing_veto_on_this)
+        db.session.commit()
+        vetoed = False
+    else:
+        # Vérifie si ce participant a déjà un véto sur une AUTRE proposition
+        any_veto = Veto.query.filter_by(participant_id=participant.id).first()
+        if any_veto:
+            return jsonify({'error': 'already_used', 'on_proposal': any_veto.proposal_id}), 409
+        # Poser le véto
+        v = Veto(proposal_id=proposal_id, participant_id=participant.id)
+        db.session.add(v)
+        db.session.commit()
+        vetoed = True
+
+    count = Veto.query.filter_by(proposal_id=proposal_id).count()
+    vetoers = db.session.query(Participant).join(Veto, Veto.participant_id == Participant.id).filter(Veto.proposal_id == proposal_id).all()
+    def badge(v):
+        return f'<span class="voter-badge" title="{v.name}">{v.emoji or "👤"}</span>'
+    vetoers_html = ''.join([badge(v) for v in vetoers])
+    return jsonify({'vetoed': vetoed, 'count': count, 'vetoers_html': vetoers_html})
 
 
 # ─── Routes: Admin Dashboard ──────────────────────────────────────────────────
@@ -360,6 +415,7 @@ def reset_all():
     """Supprime absolument tout : trip, propositions, participants, votes."""
     if not is_admin(): return redirect(url_for('admin_login'))
     Vote.query.delete()
+    Veto.query.delete()
     Proposal.query.delete()
     Trip.query.delete()
     Participant.query.delete()
@@ -484,13 +540,16 @@ def api_results():
     result = []
     for prop in proposals:
         voters = db.session.query(Participant).join(Vote).filter(Vote.proposal_id == prop.id).all()
+        vetoers = db.session.query(Participant).join(Veto, Veto.participant_id == Participant.id).filter(Veto.proposal_id == prop.id).all()
         result.append({
             'id': prop.id,
             'title': prop.title,
             'count': len(voters),
             'color': prop.color,
             'icon': prop.icon,
-            'voters': [{'name': v.name, 'emoji': v.emoji or '👤', 'avatar': ''} for v in voters]
+            'voters': [{'name': v.name, 'emoji': v.emoji or '👤', 'avatar': ''} for v in voters],
+            'veto_count': len(vetoers),
+            'vetoers': [{'name': v.name, 'emoji': v.emoji or '👤'} for v in vetoers],
         })
     return jsonify(result)
 
