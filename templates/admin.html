@@ -135,6 +135,13 @@
               </div>
             </div>
 
+            <!-- Travel times preview -->
+            <div id="travel-preview" style="display:none; margin-bottom:14px;">
+              <label class="field-label">🚗 Temps de trajet calculés</label>
+              <div id="travel-preview-content" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:0.82rem;"></div>
+            </div>
+            <input type="hidden" name="travel_times" id="travel-times-input">
+
             <div style="margin-bottom:18px;">
               <label class="field-label">Lien source (Airbnb, Booking...)</label>
               <input name="source_url" class="input-field" placeholder="https://airbnb.com/rooms/...">
@@ -247,6 +254,12 @@
                   <input name="longitude" id="edit-lng-{{ prop.id }}" class="input-field" value="{{ prop.longitude or '' }}">
                 </div>
               </div>
+              <!-- Travel times edit preview -->
+              <div id="travel-preview-edit-{{ prop.id }}" style="display:none; margin-bottom:12px;">
+                <label class="field-label">🚗 Temps de trajet recalculés</label>
+                <div id="travel-content-edit-{{ prop.id }}" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; font-size:0.82rem;"></div>
+              </div>
+              <input type="hidden" name="travel_times" id="edit-travel-times-{{ prop.id }}" value="{{ prop.travel_times or '' }}">
               <div style="margin-bottom:14px;">
                 <label class="field-label">Lien source</label>
                 <input name="source_url" class="input-field" value="{{ prop.source_url or '' }}">
@@ -403,30 +416,86 @@ function toggleEditParticipant(id) {
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
+function renderTravelTimes(data) {
+  const cities = ['Paris', 'Marseille', 'Bordeaux', 'Toulouse'];
+  const flags  = { Paris: '🗼', Marseille: '⚓', Bordeaux: '🍷', Toulouse: '🌸' };
+  return `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">` +
+    cities.map(city => {
+      const d = data[city] || {};
+      const train = d.train ? `<span style="color:var(--accent);">🚄 ${d.train}</span>${d.train_note ? ` <span style="color:var(--muted); font-size:0.75rem;">(${d.train_note})</span>` : ''}` : `<span style="color:var(--muted); font-size:0.75rem;">Train non estimé</span>`;
+      return `<div style="padding:8px; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
+        <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.85rem; margin-bottom:4px;">${flags[city]} ${city}</div>
+        <div style="margin-bottom:2px;">🚗 ${d.drive || '<span style="color:var(--muted);">N/A</span>'}</div>
+        <div>${train}</div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
 async function geocodeAddress() {
   const addr = document.getElementById('address-input').value;
   if (!addr) return;
-  const res = await fetch('/api/geocode?address=' + encodeURIComponent(addr));
-  if (res.ok) {
-    const data = await res.json();
-    document.getElementById('lat-input').value = data.lat.toFixed(6);
-    document.getElementById('lng-input').value = data.lng.toFixed(6);
-  } else {
-    alert('Adresse non trouvée. Entrez les coordonnées manuellement.');
+  const btn = event.currentTarget;
+  btn.textContent = '⏳ Géocodage…';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/geocode?address=' + encodeURIComponent(addr));
+    if (res.ok) {
+      const data = await res.json();
+      const lat = data.lat.toFixed(6);
+      const lng = data.lng.toFixed(6);
+      document.getElementById('lat-input').value = lat;
+      document.getElementById('lng-input').value = lng;
+
+      // Calcul temps de trajet
+      btn.textContent = '🚗 Calcul trajets…';
+      const tr = await fetch(`/api/travel-times?lat=${lat}&lng=${lng}`);
+      if (tr.ok) {
+        const trData = await tr.json();
+        document.getElementById('travel-times-input').value = JSON.stringify(trData);
+        document.getElementById('travel-preview-content').innerHTML = renderTravelTimes(trData);
+        document.getElementById('travel-preview').style.display = '';
+      }
+    } else {
+      alert('Adresse non trouvée. Entrez les coordonnées manuellement.');
+    }
+  } catch(e) {
+    alert('Erreur de géocodage : ' + e.message);
   }
+  btn.textContent = '📍 Géocoder';
+  btn.disabled = false;
 }
 
 async function geocodeEdit(propId) {
   const addr = document.getElementById('edit-address-' + propId).value;
   if (!addr) return;
-  const res = await fetch('/api/geocode?address=' + encodeURIComponent(addr));
-  if (res.ok) {
-    const data = await res.json();
-    document.getElementById('edit-lat-' + propId).value = data.lat.toFixed(6);
-    document.getElementById('edit-lng-' + propId).value = data.lng.toFixed(6);
-  } else {
-    alert('Adresse non trouvée.');
+  const btn = event.currentTarget;
+  btn.textContent = '⏳ Géocodage…';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/geocode?address=' + encodeURIComponent(addr));
+    if (res.ok) {
+      const data = await res.json();
+      const lat = data.lat.toFixed(6);
+      const lng = data.lng.toFixed(6);
+      document.getElementById('edit-lat-' + propId).value = lat;
+      document.getElementById('edit-lng-' + propId).value = lng;
+
+      btn.textContent = '🚗 Calcul trajets…';
+      const tr = await fetch(`/api/travel-times?lat=${lat}&lng=${lng}`);
+      if (tr.ok) {
+        const trData = await tr.json();
+        document.getElementById('edit-travel-times-' + propId).value = JSON.stringify(trData);
+        document.getElementById('travel-content-edit-' + propId).innerHTML = renderTravelTimes(trData);
+        document.getElementById('travel-preview-edit-' + propId).style.display = '';
+      }
+    } else {
+      alert('Adresse non trouvée.');
+    }
+  } catch(e) {
+    alert('Erreur : ' + e.message);
   }
+  btn.textContent = '📍 Géocoder';
+  btn.disabled = false;
 }
 </script>
 {% endblock %}
