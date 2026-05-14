@@ -12,6 +12,38 @@
   .tab-btn:not(.active) { background: transparent; color: var(--muted); }
   .tab-btn:not(.active):hover { color: var(--text); }
 
+  /* ── Travel times overlay ── */
+  .travel-overlay {
+    display: none; position: fixed; inset: 0; z-index: 15000;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(7px);
+    align-items: center; justify-content: center;
+  }
+  .travel-overlay.open { display: flex; }
+  .travel-overlay-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 28px;
+    min-width: 320px; max-width: 480px; width: 92%;
+    max-height: 85vh; overflow-y: auto;
+    animation: fadeUp 0.22s ease both;
+  }
+  .travel-city-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 10px;
+  }
+  .travel-city-card:last-child { margin-bottom: 0; }
+  .travel-row { display:flex; align-items:center; gap:8px; margin-top:6px; font-size:0.88rem; }
+
+  /* Bouton trajet */
+  .travel-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 0.78rem;
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    padding: 4px 0; transition: color 0.15s;
+    text-decoration: underline; text-underline-offset: 3px;
+    display: block; margin-bottom: 4px;
+  }
+  .travel-btn:hover { color: var(--accent); }
+
   /* ── Voters overlay ── */
   .voters-overlay {
     display: none; position: fixed; inset: 0; z-index: 10000;
@@ -202,6 +234,15 @@
             {% endfor %}
           </div>
           {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Travel times button -->
+        {% if prop.get_travel_times() %}
+        <div style="margin-bottom:8px;">
+          <button class="travel-btn" onclick="openTravelOverlay({{ prop.id }})">
+            🚗 Voir les temps de trajet
+          </button>
         </div>
         {% endif %}
 
@@ -432,13 +473,13 @@
   <div class="veto-confirm-box" onclick="event.stopPropagation()">
     <div style="font-size:2.5rem; margin-bottom:12px;">💀</div>
     <h3 style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.15rem; margin-bottom:12px; color:#EF4444;">
-      Pas si vite minot, Contre-uno : Véto !
+      Véto absolu !
     </h3>
     <p style="color:var(--muted); font-size:0.9rem; line-height:1.6; margin-bottom:8px;">
-      Si cette proposition est choisie, tu penses que tu <strong style="color:var(--text);">ne viendras pas</strong> (du coup on privilégiera une autre loc).
+      Si cette proposition est choisie, tu confirms que tu <strong style="color:var(--text);">ne viendras pas</strong>.
     </p>
     <p style="color:#EF444499; font-size:0.83rem; margin-bottom:24px; font-family:'Syne',sans-serif; font-weight:600;">
-      ⚠️ Tu ne peux utiliser ce NON qu'une seule fois au total.<br>Tu peux l'enlever en recliquant dessus si tu veux le déplacer t'inquiète.
+      ⚠️ Tu ne peux utiliser ce NON qu'une seule fois au total.<br>Tu peux l'enlever en recliquant dessus si tu veux le déplacer.
     </p>
     <div style="display:flex; gap:12px; justify-content:center;">
       <button onclick="cancelVeto()" style="
@@ -455,9 +496,29 @@
   </div>
 </div>
 
-{% endblock %}
+<!-- ═══ TRAVEL TIMES OVERLAY ═══ -->
+<div class="travel-overlay" id="travel-overlay" onclick="closeTravelOverlay()">
+  <div class="travel-overlay-box" onclick="event.stopPropagation()">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; gap:12px;">
+      <div>
+        <p style="color:var(--muted); font-size:0.75rem; font-family:'Syne',sans-serif; text-transform:uppercase; letter-spacing:.08em; margin-bottom:2px;">Temps de trajet</p>
+        <h3 id="travel-overlay-title" style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.05rem;"></h3>
+      </div>
+      <button onclick="closeTravelOverlay()" style="
+        background:var(--surface2); border:1px solid var(--border);
+        color:var(--muted); width:32px; height:32px; border-radius:50%;
+        cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;
+        flex-shrink:0;
+      ">✕</button>
+    </div>
+    <div id="travel-overlay-content"></div>
+    <p style="color:var(--muted); font-size:0.72rem; margin-top:14px; line-height:1.5;">
+      🚗 Voiture via OSRM (open source) · 🚄 Estimation train indicative, sans correspondances garanties.
+    </p>
+  </div>
+</div>
 
-{% block extra_scripts %}
+{% endblock %}
 <script>
 // ═══════════════════════════════════════════
 //  DATA
@@ -481,6 +542,13 @@ const votersData = {
   {% endfor %}
 };
 
+// Travel times per proposal
+const travelData = {
+  {% for prop in proposals %}
+  {{ prop.id }}: {{ prop.get_travel_times()|tojson }},
+  {% endfor %}
+};
+
 // Veto data per proposal (injected from Jinja)
 const vetosData = {
   {% for prop in proposals %}
@@ -500,6 +568,61 @@ const vetosData = {
 
 // Proposition sur laquelle ce participant a son véto (-1 si aucun)
 let myVetoProposalId = {{ my_veto_proposal_id if my_veto_proposal_id is not none else -1 }};
+
+// ═══════════════════════════════════════════
+//  TRAVEL TIMES OVERLAY
+// ═══════════════════════════════════════════
+const CITY_FLAGS = { Paris: '🗼', Marseille: '⚓', Bordeaux: '🍷', Toulouse: '🌸' };
+
+function openTravelOverlay(proposalId) {
+  const data    = travelData[proposalId];
+  const overlay = document.getElementById('travel-overlay');
+  const title   = document.getElementById('travel-overlay-title');
+  const content = document.getElementById('travel-overlay-content');
+
+  // Trouver le titre de la proposition depuis votersData
+  const propTitle = votersData[proposalId] ? votersData[proposalId].title : 'Proposition';
+  title.textContent = propTitle;
+
+  if (!data || Object.keys(data).length === 0) {
+    content.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun temps de trajet calculé pour cette proposition.</p>';
+  } else {
+    const cities = ['Paris', 'Marseille', 'Bordeaux', 'Toulouse'];
+    content.innerHTML = cities.map(city => {
+      const d = data[city] || {};
+      const driveHtml = d.drive
+        ? `<span style="font-weight:600;">${d.drive}</span>`
+        : `<span style="color:var(--muted);">N/A</span>`;
+      const trainHtml = d.train
+        ? `<span style="font-weight:600; color:var(--accent);">${d.train}</span>${d.train_note ? ` <span style="color:var(--muted); font-size:0.75rem;">(${d.train_note})</span>` : ''}`
+        : `<span style="color:var(--muted); font-size:0.82rem;">${d.train_note || 'Non estimé'}</span>`;
+      return `
+        <div class="travel-city-card">
+          <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; margin-bottom:8px;">
+            ${CITY_FLAGS[city] || '🏙️'} ${city}
+          </div>
+          <div class="travel-row">
+            <span style="font-size:1rem;">🚗</span>
+            <span style="color:var(--muted); min-width:52px; font-size:0.82rem;">Voiture</span>
+            ${driveHtml}
+          </div>
+          <div class="travel-row">
+            <span style="font-size:1rem;">🚄</span>
+            <span style="color:var(--muted); min-width:52px; font-size:0.82rem;">Train</span>
+            ${trainHtml}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTravelOverlay() {
+  document.getElementById('travel-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
 
 // ═══════════════════════════════════════════
 //  LIGHTBOX
@@ -600,13 +723,13 @@ function openVetoersOverlay(proposalId) {
 
   title.innerHTML = `
     <div style="font-size:0.9rem; color:#EF444499; margin-bottom:4px;">
-        <span style="display:block;">💀 Les bornés </span>
+        <span style="display:block;">💀 Les récalcitrants</span>
     </div>
     <div>${data.title} — ${data.vetoers.length} NON${data.vetoers.length !== 1 ? '' : ''}</div>
   `;
 
   if (data.vetoers.length === 0) {
-    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;"> Pixel, aucun véto pour le moment.</p>';
+    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun véto pour le moment.</p>';
   } else {
     list.innerHTML = data.vetoers.map(v => `
       <div class="voter-row">
@@ -749,6 +872,10 @@ document.addEventListener('keydown', e => {
   }
   if (document.getElementById('veto-confirm-overlay').classList.contains('open')) {
     if (e.key === 'Escape') cancelVeto();
+    return;
+  }
+  if (document.getElementById('travel-overlay').classList.contains('open')) {
+    if (e.key === 'Escape') closeTravelOverlay();
     return;
   }
   if (document.getElementById('vetoers-overlay').classList.contains('open')) {
