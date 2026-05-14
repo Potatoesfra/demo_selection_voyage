@@ -513,7 +513,7 @@
     </div>
     <div id="travel-overlay-content"></div>
     <p style="color:var(--muted); font-size:0.72rem; margin-top:14px; line-height:1.5;">
-      🚗 Voiture via OSRM (open source) · 🚄 Estimation train indicative, sans correspondances garanties.
+      🚗 Temps voiture via OSRM (open source) — plages indicatives. 🚂 Gare via OpenStreetMap.
     </p>
   </div>
 </div>
@@ -588,14 +588,21 @@ function openTravelOverlay(proposalId) {
     content.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun temps de trajet calculé pour cette proposition.</p>';
   } else {
     const cities = ['Paris', 'Marseille', 'Bordeaux', 'Toulouse'];
+    const station = data['_station'] || {};
+    const stationHtml = station.name
+      ? `<div style="margin-top:14px; padding:12px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.3rem;">🚂</span>
+          <div>
+            <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.88rem;">Gare la plus proche</div>
+            <div style="color:var(--muted); font-size:0.82rem;">${station.name}${station.dist_km ? ` · ${station.dist_km} km` : ''}</div>
+          </div>
+         </div>`
+      : '';
     content.innerHTML = cities.map(city => {
       const d = data[city] || {};
       const driveHtml = d.drive
         ? `<span style="font-weight:600;">${d.drive}</span>`
         : `<span style="color:var(--muted);">N/A</span>`;
-      const trainHtml = d.train
-        ? `<span style="font-weight:600; color:var(--accent);">${d.train}</span>${d.train_note ? ` <span style="color:var(--muted); font-size:0.75rem;">(${d.train_note})</span>` : ''}`
-        : `<span style="color:var(--muted); font-size:0.82rem;">${d.train_note || 'Non estimé'}</span>`;
       return `
         <div class="travel-city-card">
           <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.95rem; margin-bottom:8px;">
@@ -603,16 +610,10 @@ function openTravelOverlay(proposalId) {
           </div>
           <div class="travel-row">
             <span style="font-size:1rem;">🚗</span>
-            <span style="color:var(--muted); min-width:52px; font-size:0.82rem;">Voiture</span>
             ${driveHtml}
           </div>
-          <div class="travel-row">
-            <span style="font-size:1rem;">🚄</span>
-            <span style="color:var(--muted); min-width:52px; font-size:0.82rem;">Train</span>
-            ${trainHtml}
-          </div>
         </div>`;
-    }).join('');
+    }).join('') + stationHtml;
   }
 
   overlay.classList.add('open');
