@@ -590,13 +590,6 @@ CITIES = {
     'Toulouse':  (43.6047, 1.4442),
 }
 
-# Temps de trajet TGV/intercités approximatifs entre grandes villes (minutes)
-# Utilisé pour estimer le train vers la destination la plus proche
-TRAIN_APPROX = {
-    # (origine, destination_proche) -> minutes
-    # Ces valeurs servent de base pour interpolation
-}
-
 def _osrm_drive(lat1, lon1, lat2, lon2):
     """Temps de trajet voiture via OSRM public (secondes)."""
     import urllib.request
@@ -609,83 +602,90 @@ def _osrm_drive(lat1, lon1, lat2, lon2):
         return data['routes'][0]['duration']  # secondes
     return None
 
-def _fmt_duration(seconds):
+def _fmt_duration_range(seconds):
+    """Formate en plage horaire arrondie à l'heure. Ex: 4h10 → 'Approx. 4-5h', 45min → 'Approx. 45-60 min'."""
     if seconds is None:
         return None
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     if h == 0:
-        return f"{m} min"
-    return f"{h}h{m:02d}"
-
-def _estimate_train(drive_seconds, city_name, dest_lat, dest_lng):
-    """
-    Estimation train : pour les grandes lignes France, le train prend ~60-75%
-    du temps voiture sur les axes TGV bien desservis, mais peut être pire
-    sur les axes sans ligne directe. On utilise la distance vol d'oiseau
-    comme indicateur.
-    """
-    import math
-    city_coords = CITIES[city_name]
-    # Distance vol d'oiseau en km
-    dlat = math.radians(dest_lat - city_coords[0])
-    dlng = math.radians(dest_lng - city_coords[1])
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(city_coords[0])) * math.cos(math.radians(dest_lat)) * math.sin(dlng/2)**2
-    dist_km = 6371 * 2 * math.asin(math.sqrt(a))
-
-    if dist_km < 80:
-        # Trop proche pour le train
-        return None, "Peu pertinent (< 80 km)"
-
-    # Vitesse commerciale TGV ~250 km/h sur axe principal, ~120 km/h régional
-    # Heuristique : axes Paris-Lyon-Marseille, Paris-Bordeaux-Toulouse bien desservis
-    tgv_axes = {
-        'Paris':     [(43.2965, 5.3698), (44.8378, -0.5792), (43.6047, 1.4442), (45.7640, 4.8357)],
-        'Marseille': [(48.8566, 2.3522), (45.7640, 4.8357), (43.6047, 1.4442)],
-        'Bordeaux':  [(48.8566, 2.3522), (43.6047, 1.4442)],
-        'Toulouse':  [(48.8566, 2.3522), (44.8378, -0.5792), (43.2965, 5.3698)],
-    }
-
-    # Vitesse moyenne estimée selon la distance
-    if dist_km > 400:
-        avg_speed = 220  # axe longue distance, probablement TGV
-    elif dist_km > 200:
-        avg_speed = 160
+        # Moins d'une heure : plage de 15 min
+        lo = (m // 15) * 15
+        hi = lo + 15
+        return f"Approx. {lo}-{hi} min"
     else:
-        avg_speed = 110  # régional
+        return f"Approx. {h}-{h+1}h"
 
-    travel_h = dist_km / avg_speed
-    # Ajouter ~30-45min de correspondances/attente
-    total_min = int(travel_h * 60) + 35
-    note = "~TGV" if avg_speed >= 200 else ("~Intercités" if avg_speed >= 140 else "~Régional")
-    return total_min * 60, note
+def _nearest_station(dest_lat, dest_lng):
+    """Trouve la gare la plus proche via Nominatim."""
+    import urllib.request, urllib.parse, math
+    query = f"gare ferroviaire near {dest_lat},{dest_lng}"
+    url = (f"https://nominatim.openstreetmap.org/search"
+           f"?format=json&q={urllib.parse.quote(query)}"
+           f"&limit=5&countrycodes=fr,es,it,de,be,ch,pt")
+    req = urllib.request.Request(url, headers={'User-Agent': 'TripVote/1.0'})
+    with urllib.request.urlopen(req, timeout=6) as r:
+        results = json.loads(r.read())
+
+    if not results:
+        # Fallback: recherche directe "railway station"
+        url2 = (f"https://nominatim.openstreetmap.org/search"
+                f"?format=json&q=railway+station"
+                f"&lat={dest_lat}&lon={dest_lng}&limit=5")
+        req2 = urllib.request.Request(url2, headers={'User-Agent': 'TripVote/1.0'})
+        with urllib.request.urlopen(req2, timeout=6) as r2:
+            results = json.loads(r2.read())
+
+    if not results:
+        return None, None
+
+    # Trouver le résultat le plus proche géographiquement
+    def haversine(lat1, lng1, lat2, lng2):
+        R = 6371
+        dlat = math.radians(lat2 - lat1)
+        dlng = math.radians(lng2 - lng1)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng/2)**2
+        return R * 2 * math.asin(math.sqrt(a))
+
+    best = min(results, key=lambda r: haversine(dest_lat, dest_lng, float(r['lat']), float(r['lon'])))
+    name = best.get('display_name', '').split(',')[0].strip()
+    dist = round(haversine(dest_lat, dest_lng, float(best['lat']), float(best['lon'])), 1)
+    return name, dist
 
 
 @app.route('/api/travel-times')
 def api_travel_times():
-    """Calcule les temps de trajet voiture (OSRM) + estimation train depuis 4 villes."""
+    """Calcule les temps de trajet voiture (OSRM) + gare la plus proche depuis 4 villes."""
     try:
         dest_lat = float(request.args.get('lat'))
         dest_lng = float(request.args.get('lng'))
     except (TypeError, ValueError):
         return jsonify({'error': 'lat/lng manquant'}), 400
 
+    # Gare la plus proche (une seule recherche pour toutes les villes)
+    station_name, station_dist = None, None
+    try:
+        station_name, station_dist = _nearest_station(dest_lat, dest_lng)
+    except Exception:
+        pass
+
     results = {}
     for city, (clat, clng) in CITIES.items():
         drive_s = None
         try:
             drive_s = _osrm_drive(clat, clng, dest_lat, dest_lng)
-        except Exception as e:
+        except Exception:
             pass
 
-        train_s, train_note = _estimate_train(drive_s, city, dest_lat, dest_lng)
-
         results[city] = {
-            'drive': _fmt_duration(drive_s),
+            'drive': _fmt_duration_range(drive_s),
             'drive_seconds': drive_s,
-            'train': _fmt_duration(train_s),
-            'train_note': train_note,
         }
+
+    results['_station'] = {
+        'name': station_name,
+        'dist_km': station_dist,
+    }
 
     return jsonify(results)
 
