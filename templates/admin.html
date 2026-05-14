@@ -419,16 +419,20 @@ function toggleEditParticipant(id) {
 function renderTravelTimes(data) {
   const cities = ['Paris', 'Marseille', 'Bordeaux', 'Toulouse'];
   const flags  = { Paris: '🗼', Marseille: '⚓', Bordeaux: '🍷', Toulouse: '🌸' };
+  const station = data['_station'] || {};
+  const stationHtml = station.name
+    ? `<div style="margin-top:10px; padding:8px 10px; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:0.8rem; color:var(--muted);">
+        🚂 Gare la plus proche : <strong style="color:var(--text);">${station.name}</strong>${station.dist_km ? ` · ${station.dist_km} km` : ''}
+       </div>`
+    : '';
   return `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">` +
     cities.map(city => {
       const d = data[city] || {};
-      const train = d.train ? `<span style="color:var(--accent);">🚄 ${d.train}</span>${d.train_note ? ` <span style="color:var(--muted); font-size:0.75rem;">(${d.train_note})</span>` : ''}` : `<span style="color:var(--muted); font-size:0.75rem;">Train non estimé</span>`;
       return `<div style="padding:8px; background:var(--surface); border:1px solid var(--border); border-radius:8px;">
         <div style="font-family:'Syne',sans-serif; font-weight:700; font-size:0.85rem; margin-bottom:4px;">${flags[city]} ${city}</div>
-        <div style="margin-bottom:2px;">🚗 ${d.drive || '<span style="color:var(--muted);">N/A</span>'}</div>
-        <div>${train}</div>
+        <div>🚗 ${d.drive || '<span style="color:var(--muted);">N/A</span>'}</div>
       </div>`;
-    }).join('') + `</div>`;
+    }).join('') + `</div>${stationHtml}`;
 }
 
 async function geocodeAddress() {
