@@ -45,6 +45,44 @@
     text-decoration: underline; text-underline-offset: 3px;
   }
   .see-votes-btn:hover { color: var(--accent); }
+  .see-vetos-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 0.78rem;
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    padding: 4px 0; transition: color 0.15s;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .see-vetos-btn:hover { color: #EF4444; }
+
+  /* Bouton NON 💀 */
+  .veto-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 10px; font-weight: 700;
+    font-family: 'Syne', sans-serif; font-size: 0.85rem;
+    cursor: pointer; transition: all 0.2s;
+    border: 1.5px solid var(--border);
+    background: var(--surface2); color: var(--muted);
+  }
+  .veto-btn:hover:not(:disabled) { border-color: #EF4444; color: #EF4444; background: #EF444411; }
+  .veto-btn.vetoed { background: #EF444422; border-color: #EF4444; color: #EF4444; }
+  .veto-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .veto-skull { display: inline-block; transition: transform 0.3s; }
+  .veto-btn.vetoed .veto-skull { transform: rotate(-15deg) scale(1.2); }
+
+  /* Pop-up de confirmation véto */
+  .veto-confirm-overlay {
+    display: none; position: fixed; inset: 0; z-index: 20000;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+    align-items: center; justify-content: center;
+  }
+  .veto-confirm-overlay.open { display: flex; }
+  .veto-confirm-box {
+    background: var(--surface); border: 1.5px solid #EF444466;
+    border-radius: 20px; padding: 32px 28px;
+    max-width: 420px; width: 90%;
+    animation: fadeUp 0.22s ease both;
+    text-align: center;
+  }
 
   /* ── Lightbox nav ── */
   .lb-arrow {
@@ -190,17 +228,49 @@
           </span>
         </div>
         {% if vote_count > 0 %}
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:6px;">
           <button class="see-votes-btn" onclick="openVotersOverlay({{ prop.id }})">
             👁 Voir qui a voté ({{ vote_count }})
           </button>
         </div>
         {% else %}
-        <div style="margin-bottom:14px;"></div>
+        <div style="margin-bottom:6px;"></div>
+        {% endif %}
+
+        <!-- Veto section -->
+        {% set veto_count = veto_counts[prop.id] %}
+        {% if veto_count > 0 %}
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+          <div id="vetoers-{{ prop.id }}" style="display:flex; gap:4px; flex-wrap:wrap;">
+            {% for pid in vetos_map[prop.id] %}
+              {% set voter = participants_by_id.get(pid) %}
+              {% if voter %}
+                <span class="voter-badge" title="{{ voter.name }}" style="filter:grayscale(1) opacity(0.7);">{{ voter.emoji or '👤' }}</span>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <span id="veto-count-{{ prop.id }}" style="color:#EF4444; font-size:0.78rem; font-family:'Syne',sans-serif; font-weight:700;">
+            {{ veto_count }} NON 💀
+          </span>
+        </div>
+        <div style="margin-bottom:14px;">
+          <button class="see-vetos-btn" onclick="openVetoersOverlay({{ prop.id }})">
+            💀 Voir les NON ({{ veto_count }})
+          </button>
+        </div>
+        {% else %}
+        <div id="vetoers-{{ prop.id }}" style="display:none;"></div>
+        <div id="veto-count-{{ prop.id }}" style="display:none;"></div>
+        <div id="see-veto-wrap-{{ prop.id }}" style="margin-bottom:14px; display:none;">
+          <button class="see-vetos-btn" onclick="openVetoersOverlay({{ prop.id }})">
+            💀 Voir les NON (0)
+          </button>
+        </div>
+        {% if vote_count == 0 %}<div style="margin-bottom:14px;"></div>{% endif %}
         {% endif %}
 
         <!-- Actions -->
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           {% if participant %}
           <button
             class="like-btn {% if voted %}liked{% endif %}"
@@ -209,6 +279,17 @@
           >
             <span class="heart">{% if voted %}❤️{% else %}🤍{% endif %}</span>
             <span>{% if voted %}Liké{% else %}Liker{% endif %}</span>
+          </button>
+          {% set my_veto_here = (my_veto_proposal_id == prop.id) %}
+          {% set veto_used_elsewhere = (my_veto_proposal_id is not none and my_veto_proposal_id != prop.id) %}
+          <button
+            class="veto-btn {% if my_veto_here %}vetoed{% endif %}"
+            id="veto-btn-{{ prop.id }}"
+            onclick="doVetoClick({{ prop.id }}, this)"
+            {% if veto_used_elsewhere %}disabled title="Tu as déjà utilisé ton véto sur une autre proposition"{% endif %}
+          >
+            <span class="veto-skull">💀</span>
+            <span>{% if my_veto_here %}NON (toi){% else %}NON{% endif %}</span>
           </button>
           {% else %}
           <span style="color:var(--muted); font-size:0.8rem;">Mode lecture (admin)</span>
@@ -331,6 +412,49 @@
   </div>
 </div>
 
+<!-- ═══ VETOERS OVERLAY ═══ -->
+<div class="voters-overlay" id="vetoers-overlay" onclick="closeVetoersOverlay()">
+  <div class="voters-overlay-box" onclick="event.stopPropagation()" style="border-color:#EF444444;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+      <h3 id="vetoers-overlay-title" style="font-family:'Syne',sans-serif; font-weight:700; font-size:1.05rem; color:#EF4444;"></h3>
+      <button onclick="closeVetoersOverlay()" style="
+        background:var(--surface2); border:1px solid var(--border);
+        color:var(--muted); width:32px; height:32px; border-radius:50%;
+        cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;
+      ">✕</button>
+    </div>
+    <div id="vetoers-overlay-list"></div>
+  </div>
+</div>
+
+<!-- ═══ VETO CONFIRMATION MODAL ═══ -->
+<div class="veto-confirm-overlay" id="veto-confirm-overlay">
+  <div class="veto-confirm-box" onclick="event.stopPropagation()">
+    <div style="font-size:2.5rem; margin-bottom:12px;">💀</div>
+    <h3 style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.15rem; margin-bottom:12px; color:#EF4444;">
+      Véto absolu !
+    </h3>
+    <p style="color:var(--muted); font-size:0.9rem; line-height:1.6; margin-bottom:8px;">
+      Si cette proposition est choisie, tu confirms que tu <strong style="color:var(--text);">ne viendras pas</strong>.
+    </p>
+    <p style="color:#EF444499; font-size:0.83rem; margin-bottom:24px; font-family:'Syne',sans-serif; font-weight:600;">
+      ⚠️ Tu ne peux utiliser ce NON qu'une seule fois au total.<br>Tu peux l'enlever en recliquant dessus si tu veux le déplacer.
+    </p>
+    <div style="display:flex; gap:12px; justify-content:center;">
+      <button onclick="cancelVeto()" style="
+        flex:1; padding:12px; border-radius:10px; border:1px solid var(--border);
+        background:var(--surface2); color:var(--muted); font-family:'Syne',sans-serif;
+        font-weight:700; cursor:pointer; font-size:0.9rem;
+      ">Annuler</button>
+      <button onclick="confirmVeto()" style="
+        flex:1; padding:12px; border-radius:10px; border:none;
+        background:#EF4444; color:white; font-family:'Syne',sans-serif;
+        font-weight:700; cursor:pointer; font-size:0.9rem;
+      ">Confirmer le NON 💀</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -356,6 +480,26 @@ const votersData = {
   },
   {% endfor %}
 };
+
+// Veto data per proposal (injected from Jinja)
+const vetosData = {
+  {% for prop in proposals %}
+  {{ prop.id }}: {
+    title: {{ (prop.icon + ' ' + prop.title)|tojson }},
+    vetoers: [
+      {% for pid in vetos_map[prop.id] %}
+        {% set voter = participants_by_id.get(pid) %}
+        {% if voter %}
+          { name: {{ voter.name|tojson }}, emoji: {{ (voter.emoji or '👤')|tojson }} },
+        {% endif %}
+      {% endfor %}
+    ]
+  },
+  {% endfor %}
+};
+
+// Proposition sur laquelle ce participant a son véto (-1 si aucun)
+let myVetoProposalId = {{ my_veto_proposal_id if my_veto_proposal_id is not none else -1 }};
 
 // ═══════════════════════════════════════════
 //  LIGHTBOX
@@ -446,6 +590,154 @@ function closeVotersOverlay() {
 }
 
 // ═══════════════════════════════════════════
+//  VETOERS OVERLAY
+// ═══════════════════════════════════════════
+function openVetoersOverlay(proposalId) {
+  const data    = vetosData[proposalId];
+  const overlay = document.getElementById('vetoers-overlay');
+  const title   = document.getElementById('vetoers-overlay-title');
+  const list    = document.getElementById('vetoers-overlay-list');
+
+  title.innerHTML = `
+    <div style="font-size:0.9rem; color:#EF444499; margin-bottom:4px;">
+        <span style="display:block;">💀 Les récalcitrants</span>
+    </div>
+    <div>${data.title} — ${data.vetoers.length} NON${data.vetoers.length !== 1 ? '' : ''}</div>
+  `;
+
+  if (data.vetoers.length === 0) {
+    list.innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px 0;">Aucun véto pour le moment.</p>';
+  } else {
+    list.innerHTML = data.vetoers.map(v => `
+      <div class="voter-row">
+        <div class="voter-avatar" style="filter:grayscale(1);">${v.emoji}</div>
+        <span style="font-family:'Syne',sans-serif; font-weight:600; font-size:0.95rem;">${v.name}</span>
+        <span style="margin-left:auto; color:#EF4444; font-size:0.85rem; font-weight:700;">NON 💀</span>
+      </div>`).join('');
+  }
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeVetoersOverlay() {
+  document.getElementById('vetoers-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════════
+//  VETO CONFIRMATION MODAL
+// ═══════════════════════════════════════════
+let _pendingVetoId  = null;
+let _pendingVetoBtn = null;
+
+function doVetoClick(proposalId, btn) {
+  // Si déjà véto sur cette proposition → retirer directement (pas de confirm)
+  if (myVetoProposalId === proposalId) {
+    submitVeto(proposalId, btn);
+    return;
+  }
+  // Sinon → pop-up de confirmation
+  _pendingVetoId  = proposalId;
+  _pendingVetoBtn = btn;
+  document.getElementById('veto-confirm-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function cancelVeto() {
+  document.getElementById('veto-confirm-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  _pendingVetoId  = null;
+  _pendingVetoBtn = null;
+}
+
+function confirmVeto() {
+  document.getElementById('veto-confirm-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  if (_pendingVetoId !== null) {
+    submitVeto(_pendingVetoId, _pendingVetoBtn);
+    _pendingVetoId  = null;
+    _pendingVetoBtn = null;
+  }
+}
+
+async function submitVeto(proposalId, btn) {
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`/veto/${proposalId}`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) {
+      const skull = btn.querySelector('.veto-skull');
+      const label = btn.querySelector('span:last-child');
+      const wasVetoed = data.vetoed;
+
+      btn.classList.toggle('vetoed', wasVetoed);
+      label.textContent = wasVetoed ? 'NON (toi)' : 'NON';
+      skull.classList.add('pop');
+      setTimeout(() => skull.classList.remove('pop'), 300);
+
+      // Met à jour myVetoProposalId
+      const prevVetoId = myVetoProposalId;
+      myVetoProposalId = wasVetoed ? proposalId : -1;
+
+      // Réactive l'ancien bouton véto si on déplaçait
+      if (prevVetoId !== -1 && prevVetoId !== proposalId) {
+        const oldBtn = document.getElementById(`veto-btn-${prevVetoId}`);
+        if (oldBtn) {
+          oldBtn.disabled = false;
+          oldBtn.removeAttribute('title');
+        }
+      }
+      // Désactive tous les autres boutons si véto posé
+      document.querySelectorAll('.veto-btn').forEach(b => {
+        const bid = parseInt(b.id.replace('veto-btn-',''));
+        if (bid !== proposalId) {
+          if (wasVetoed) {
+            b.disabled = true;
+            b.title = 'Tu as déjà utilisé ton véto sur une autre proposition';
+          } else {
+            b.disabled = false;
+            b.removeAttribute('title');
+          }
+        }
+      });
+
+      // Met à jour compteur et badges
+      const countEl = document.getElementById(`veto-count-${proposalId}`);
+      if (countEl) {
+        countEl.textContent = `${data.count} NON 💀`;
+        countEl.style.display = data.count > 0 ? '' : 'none';
+      }
+      const vetoersEl = document.getElementById(`vetoers-${proposalId}`);
+      if (vetoersEl) {
+        vetoersEl.innerHTML = data.vetoers_html;
+        vetoersEl.style.display = data.count > 0 ? 'flex' : 'none';
+      }
+
+      // Met à jour le bouton "voir les non"
+      const seeVetoWrap = document.getElementById(`see-veto-wrap-${proposalId}`);
+      const seeVetoBtn = document.querySelector(`[onclick="openVetoersOverlay(${proposalId})"]`);
+      if (seeVetoBtn) {
+        seeVetoBtn.textContent = `💀 Voir les NON (${data.count})`;
+        if (seeVetoWrap) seeVetoWrap.style.display = data.count > 0 ? '' : 'none';
+        else if (seeVetoBtn.parentElement) seeVetoBtn.parentElement.style.display = data.count > 0 ? '' : 'none';
+      }
+
+      // Met à jour vetosData en mémoire
+      if (vetosData[proposalId]) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = data.vetoers_html;
+        vetosData[proposalId].vetoers = Array.from(tmp.querySelectorAll('.voter-badge')).map(el => ({
+          emoji: el.textContent.trim(),
+          name: el.getAttribute('title') || ''
+        }));
+      }
+    }
+  } catch(e) { console.error(e); }
+  btn.disabled = (myVetoProposalId !== -1 && myVetoProposalId !== proposalId);
+}
+
+// ═══════════════════════════════════════════
 //  KEYBOARD
 // ═══════════════════════════════════════════
 document.addEventListener('keydown', e => {
@@ -453,6 +745,14 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape')      closeLightbox();
     if (e.key === 'ArrowLeft')   lbNav(-1);
     if (e.key === 'ArrowRight')  lbNav(1);
+    return;
+  }
+  if (document.getElementById('veto-confirm-overlay').classList.contains('open')) {
+    if (e.key === 'Escape') cancelVeto();
+    return;
+  }
+  if (document.getElementById('vetoers-overlay').classList.contains('open')) {
+    if (e.key === 'Escape') closeVetoersOverlay();
     return;
   }
   if (document.getElementById('voters-overlay').classList.contains('open')) {
@@ -536,7 +836,13 @@ async function fetchResults() {
   const sorted = [...data].sort((a,b) => b.count - a.count);
   container.innerHTML = sorted.map(p => {
     const pct = total > 0 ? Math.round(p.count / total * 100) : 0;
-    const voters = p.voters.map(v => `<span class="voter-badge" title="${v.name}">${v.emoji}</span>`).join('');
+    const voters  = p.voters.map(v => `<span class="voter-badge" title="${v.name}">${v.emoji}</span>`).join('');
+    const vetoers = (p.vetoers || []).map(v => `<span class="voter-badge" title="${v.name}" style="filter:grayscale(1) opacity(0.7);">${v.emoji}</span>`).join('');
+    const vetoSection = p.veto_count > 0 ? `
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <span style="font-size:0.78rem;color:#EF4444;font-family:'Syne',sans-serif;font-weight:700;">${p.veto_count} NON 💀</span>
+        <div style="display:flex;gap:4px;">${vetoers}</div>
+      </div>` : '';
     return `
       <div style="margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
@@ -548,6 +854,7 @@ async function fetchResults() {
           <div class="vote-bar-fill" style="width:${pct}%;background:${p.color};"></div>
         </div>
         <div style="margin-top:6px;display:flex;gap:4px;">${voters}</div>
+        ${vetoSection}
       </div>`;
   }).join('');
 
