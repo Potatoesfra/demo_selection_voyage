@@ -55,6 +55,7 @@ class Proposal(db.Model):
     source_url = db.Column(db.String(500))
     color = db.Column(db.String(7), default='#3B82F6')
     icon = db.Column(db.String(10), default='🏠')
+    travel_times = db.Column(db.Text)  # JSON: temps de trajet depuis les villes
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     votes = db.relationship('Vote', backref='proposal', lazy=True, cascade='all, delete-orphan')
 
@@ -69,6 +70,10 @@ class Proposal(db.Model):
     def get_images(self):
         try: return json.loads(self.images) if self.images else []
         except: return []
+
+    def get_travel_times(self):
+        try: return json.loads(self.travel_times) if self.travel_times else {}
+        except: return {}
 
     def vote_count(self):
         return Vote.query.filter_by(proposal_id=self.id).count()
@@ -488,6 +493,7 @@ def add_proposal():
         source_url=request.form.get('source_url', ''),
         color=request.form.get('color', '#3B82F6'),
         icon=request.form.get('icon', '🏠'),
+        travel_times=request.form.get('travel_times', None),
     )
     db.session.add(p)
     db.session.commit()
@@ -524,6 +530,8 @@ def edit_proposal(pid):
     p.source_url = request.form.get('source_url', '')
     p.color = request.form.get('color', p.color)
     p.icon = request.form.get('icon', p.icon)
+    if request.form.get('travel_times'):
+        p.travel_times = request.form.get('travel_times')
 
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
@@ -572,6 +580,115 @@ def api_proposals_map():
 
 
 # ─── Geocoding helper ─────────────────────────────────────────────────────────
+
+# ─── Travel Times ─────────────────────────────────────────────────────────────
+
+CITIES = {
+    'Paris':     (48.8566, 2.3522),
+    'Marseille': (43.2965, 5.3698),
+    'Bordeaux':  (44.8378, -0.5792),
+    'Toulouse':  (43.6047, 1.4442),
+}
+
+# Temps de trajet TGV/intercités approximatifs entre grandes villes (minutes)
+# Utilisé pour estimer le train vers la destination la plus proche
+TRAIN_APPROX = {
+    # (origine, destination_proche) -> minutes
+    # Ces valeurs servent de base pour interpolation
+}
+
+def _osrm_drive(lat1, lon1, lat2, lon2):
+    """Temps de trajet voiture via OSRM public (secondes)."""
+    import urllib.request
+    url = (f"http://router.project-osrm.org/route/v1/driving/"
+           f"{lon1},{lat1};{lon2},{lat2}?overview=false")
+    req = urllib.request.Request(url, headers={'User-Agent': 'TripVote/1.0'})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        data = json.loads(r.read())
+    if data.get('code') == 'Ok':
+        return data['routes'][0]['duration']  # secondes
+    return None
+
+def _fmt_duration(seconds):
+    if seconds is None:
+        return None
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    if h == 0:
+        return f"{m} min"
+    return f"{h}h{m:02d}"
+
+def _estimate_train(drive_seconds, city_name, dest_lat, dest_lng):
+    """
+    Estimation train : pour les grandes lignes France, le train prend ~60-75%
+    du temps voiture sur les axes TGV bien desservis, mais peut être pire
+    sur les axes sans ligne directe. On utilise la distance vol d'oiseau
+    comme indicateur.
+    """
+    import math
+    city_coords = CITIES[city_name]
+    # Distance vol d'oiseau en km
+    dlat = math.radians(dest_lat - city_coords[0])
+    dlng = math.radians(dest_lng - city_coords[1])
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(city_coords[0])) * math.cos(math.radians(dest_lat)) * math.sin(dlng/2)**2
+    dist_km = 6371 * 2 * math.asin(math.sqrt(a))
+
+    if dist_km < 80:
+        # Trop proche pour le train
+        return None, "Peu pertinent (< 80 km)"
+
+    # Vitesse commerciale TGV ~250 km/h sur axe principal, ~120 km/h régional
+    # Heuristique : axes Paris-Lyon-Marseille, Paris-Bordeaux-Toulouse bien desservis
+    tgv_axes = {
+        'Paris':     [(43.2965, 5.3698), (44.8378, -0.5792), (43.6047, 1.4442), (45.7640, 4.8357)],
+        'Marseille': [(48.8566, 2.3522), (45.7640, 4.8357), (43.6047, 1.4442)],
+        'Bordeaux':  [(48.8566, 2.3522), (43.6047, 1.4442)],
+        'Toulouse':  [(48.8566, 2.3522), (44.8378, -0.5792), (43.2965, 5.3698)],
+    }
+
+    # Vitesse moyenne estimée selon la distance
+    if dist_km > 400:
+        avg_speed = 220  # axe longue distance, probablement TGV
+    elif dist_km > 200:
+        avg_speed = 160
+    else:
+        avg_speed = 110  # régional
+
+    travel_h = dist_km / avg_speed
+    # Ajouter ~30-45min de correspondances/attente
+    total_min = int(travel_h * 60) + 35
+    note = "~TGV" if avg_speed >= 200 else ("~Intercités" if avg_speed >= 140 else "~Régional")
+    return total_min * 60, note
+
+
+@app.route('/api/travel-times')
+def api_travel_times():
+    """Calcule les temps de trajet voiture (OSRM) + estimation train depuis 4 villes."""
+    try:
+        dest_lat = float(request.args.get('lat'))
+        dest_lng = float(request.args.get('lng'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'lat/lng manquant'}), 400
+
+    results = {}
+    for city, (clat, clng) in CITIES.items():
+        drive_s = None
+        try:
+            drive_s = _osrm_drive(clat, clng, dest_lat, dest_lng)
+        except Exception as e:
+            pass
+
+        train_s, train_note = _estimate_train(drive_s, city, dest_lat, dest_lng)
+
+        results[city] = {
+            'drive': _fmt_duration(drive_s),
+            'drive_seconds': drive_s,
+            'train': _fmt_duration(train_s),
+            'train_note': train_note,
+        }
+
+    return jsonify(results)
+
 
 @app.route('/api/geocode')
 def geocode():
