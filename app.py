@@ -271,7 +271,7 @@ def switch_profile():
     session.pop('participant_id', None)
     session['is_admin'] = False
     resp = make_response(redirect(url_for('index')))
-    resp.delete_cookie(COOKIE_NAME)
+    resp.delete_cookie(COOKIE_NAME, samesite='None', secure=True)
     return resp
 
 
