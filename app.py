@@ -191,7 +191,7 @@ def admin_login():
 def logout():
     session.clear()
     resp = make_response(redirect(url_for('index')))
-    resp.delete_cookie(COOKIE_NAME)
+    resp.delete_cookie(COOKIE_NAME, samesite='None', secure=True)
     return resp
 
 
