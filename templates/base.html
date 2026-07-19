@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}WixStrass{% endblock %}</title>
+  <title>{% block title %}TripVote{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -158,8 +158,8 @@
 <nav style="border-bottom:1px solid var(--border); background: rgba(13,15,20,0.85); backdrop-filter: blur(12px);" class="sticky top-0 z-50">
   <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2">
-      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--accent);">Wix</span>
-      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--text);">Strass</span>
+      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--accent);">Trip</span>
+      <span style="font-family:'Syne',sans-serif; font-weight:800; font-size:1.2rem; color:var(--text);">Vote</span>
       <span style="font-size:1.1rem;">✈️</span>
     </a>
     <div class="flex items-center gap-4">
@@ -186,7 +186,7 @@
 
 <footer style="border-top:1px solid var(--border); margin-top:60px;">
   <div class="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between" style="color:var(--muted); font-size:0.8rem;">
-    <span>WixStrass  — Fait avec amoür par le skinf (surtout claude)</span>
+    <span>TripVote  — Coordonner son voyage sans pression !</span>
     {% if not is_admin %}
       <a href="/admin/login" style="color:var(--border); transition:color 0.2s;" onmouseover="this.style.color='var(--muted)'" onmouseout="this.style.color='var(--border)'">Admin</a>
     {% endif %}
