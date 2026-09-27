@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TripVote — choisir un voyage en groupe</title>
+  <meta name="description" content="TripVote : application web collaborative pour choisir en groupe la destination d'un weekend. Vote sans compte, droit de véto, carte, temps de trajet, résultats en temps réel.">
+  <meta property="og:title" content="TripVote — choisir un voyage en groupe">
+  <meta property="og:description" content="Vote sans compte, droit de véto, carte interactive, temps de trajet calculés, résultats en temps réel.">
+  <meta property="og:image" content="apercus/propositions.jpg">
+  <!--
+    Page de présentation statique (GitHub Pages, dossier docs/) : s'affiche
+    instantanément, contrairement à la démo Render gratuite qui dort après
+    15 min d'inactivité. Dès l'ouverture, une requête réveille le serveur de
+    démo pendant la lecture ; le bouton indique quand elle est prête.
+    Captures : docs/apercus/ (app lancée en local sur un voyage fictif).
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --fond: #0d0f14; --fond-2: #12151c; --carte: #161920; --carte-2: #1e2230; --bord: #2a2f42;
+      --texte: #e8eaf0; --doux: #9aa1bd; --accent: #6ee7b7; --accent-2: #818cf8;
+      --rouge: #f87171; --ambre: #fcd34d; --vert: #6ee7b7;
+      --titre: "Syne", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--fond); color: var(--texte);
+      font: 16px/1.6 "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    a { color: var(--accent); }
+    img { max-width: 100%; display: block; }
+    h1, h2, h3 { font-family: var(--titre); }
+    .conteneur { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+    /* En-tête */
+    header.hero {
+      background:
+        radial-gradient(900px 420px at 80% -10%, rgba(110,231,183,.14), transparent 60%),
+        radial-gradient(700px 380px at 10% 0%, rgba(129,140,248,.12), transparent 60%),
+        var(--fond-2);
+      border-bottom: 1px solid var(--bord);
+      padding-block: 56px 40px;
+    }
+    .marque { font-family: var(--titre); font-weight: 800; font-size: 1.05rem; margin: 0 0 22px; letter-spacing: .01em; }
+    .marque span { color: var(--accent); }
+    .surtitre { color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; margin: 0 0 10px; }
+    h1 { font-size: clamp(1.9rem, 4.2vw, 3rem); font-weight: 800; line-height: 1.12; margin: 0 0 16px; letter-spacing: -.01em; }
+    h1 em { font-style: normal; color: var(--accent); }
+    .accroche { font-size: 1.12rem; color: var(--doux); max-width: 62ch; margin: 0 0 26px; }
+    .accroche b { color: var(--texte); }
+    .chiffres { display: flex; flex-wrap: wrap; gap: 10px 30px; margin: 0 0 28px; padding: 0; list-style: none; }
+    .chiffres li { color: var(--doux); font-size: .92rem; }
+    .chiffres b { display: block; color: var(--texte); font-family: var(--titre); font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .bouton {
+      display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 10px;
+      font-family: var(--titre); font-weight: 700; text-decoration: none; border: 1px solid var(--accent);
+      transition: background .15s, transform .15s, opacity .15s;
+    }
+    .bouton.principal { background: var(--accent); color: #0d0f14; }
+    .bouton.principal:hover { opacity: .88; transform: translateY(-1px); }
+    .bouton.second { color: var(--accent); background: transparent; border-color: var(--bord); }
+    .bouton.second:hover { border-color: var(--accent); background: rgba(110,231,183,.08); }
+    .etat-demo { display: inline-flex; align-items: center; gap: 8px; color: var(--doux); font-size: .88rem; }
+    .etat-demo i { width: 9px; height: 9px; border-radius: 50%; background: var(--ambre); box-shadow: 0 0 0 0 rgba(252,211,77,.6); animation: pouls 1.4s infinite; }
+    .etat-demo.pret i { background: var(--vert); animation: none; }
+    .etat-demo.erreur i { background: #9e9e9e; animation: none; }
+    @keyframes pouls { 70% { box-shadow: 0 0 0 8px rgba(252,211,77,0); } 100% { box-shadow: 0 0 0 0 rgba(252,211,77,0); } }
+    .capture-principale {
+      margin-top: 36px; border-radius: 14px; overflow: hidden; border: 1px solid var(--bord);
+      box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    }
+    .capture-principale img { width: 100%; height: auto; }
+
+    /* Sections */
+    section { padding-block: 56px 8px; }
+    h2 { font-size: 1.6rem; font-weight: 800; margin: 0 0 8px; }
+    .sous { color: var(--doux); margin: 0 0 26px; max-width: 70ch; }
+    .grille { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+    .pilier { background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 20px 20px 16px; }
+    .pilier h3 { margin: 0 0 6px; font-size: 1.02rem; font-weight: 700; }
+    .pilier h3 span { margin-right: 8px; }
+    .pilier p { margin: 0; color: var(--doux); font-size: .94rem; }
+    .pilier b { color: var(--texte); font-weight: 500; }
+
+    /* Étapes */
+    .etapes { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); counter-reset: etape; padding: 0; margin: 0; list-style: none; }
+    .etapes li { position: relative; background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; padding: 20px 20px 16px 64px; color: var(--doux); font-size: .94rem; }
+    .etapes li::before {
+      counter-increment: etape; content: counter(etape);
+      position: absolute; left: 18px; top: 18px; width: 32px; height: 32px; border-radius: 50%;
+      display: grid; place-items: center; font-family: var(--titre); font-weight: 800; color: #0d0f14; background: var(--accent);
+    }
+    .etapes li:nth-child(2)::before { background: var(--accent-2); }
+    .etapes li:nth-child(3)::before { background: var(--ambre); }
+    .etapes b { display: block; color: var(--texte); font-family: var(--titre); margin-bottom: 2px; }
+
+    .galerie { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
+    figure { margin: 0; background: var(--carte); border: 1px solid var(--bord); border-radius: 14px; overflow: hidden; }
+    figure a { display: block; overflow: hidden; }
+    figure img { width: 100%; height: auto; aspect-ratio: 880 / 550; object-fit: cover; object-position: top center; transition: transform .25s; }
+    figure a:hover img { transform: scale(1.02); }
+    figcaption { padding: 12px 14px 14px; font-size: .9rem; color: var(--doux); }
+    figcaption b { color: var(--texte); display: block; margin-bottom: 2px; font-family: var(--titre); }
+    .puces { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+    .puces li { border: 1px solid var(--bord); background: var(--carte); border-radius: 999px; padding: 4px 12px; font-size: .86rem; color: var(--doux); }
+    .deux-col { display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+    .encart { background: var(--carte); border: 1px solid var(--bord); border-left: 3px solid var(--accent); border-radius: 10px; padding: 16px 18px; color: var(--doux); font-size: .94rem; }
+    .encart b { color: var(--texte); }
+    .encart.violet { border-left-color: var(--accent-2); }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bord); vertical-align: top; }
+    th { color: var(--doux); font-weight: 600; }
+    .tableau-defile { overflow-x: auto; }
+    code { font-size: .88em; background: var(--carte-2); border: 1px solid var(--bord); border-radius: 5px; padding: 1px 5px; }
+    footer { margin-top: 64px; padding-block: 28px; border-top: 1px solid var(--bord); color: var(--doux); font-size: .88rem; }
+    footer .conteneur { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+    .credits-pied { flex-basis: 100%; margin: 6px 0 0; font-size: .8rem; opacity: .85; }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="conteneur">
+    <p class="marque">Trip<span>Vote</span> ✈️</p>
+    <p class="surtitre">Application web collaborative · Flask</p>
+    <h1>Choisir un voyage en groupe,<br><em>sans tensions</em></h1>
+    <p class="accroche">Chacun propose, chacun vote, et le groupe voit le résultat <b>en temps réel</b>.
+      Les participants entrent <b>sans créer de compte</b>, disposent d'un <b>droit de véto</b> unique,
+      et comparent les options sur une <b>carte</b> avec les <b>temps de trajet</b> depuis leur ville.</p>
+    <ul class="chiffres">
+      <li><b>0</b>compte à créer</li>
+      <li><b>1</b>véto par participant</li>
+      <li><b>5 s</b>entre deux mises à jour des résultats</li>
+      <li><b>4</b>villes de départ comparées</li>
+    </ul>
+    <div class="actions">
+      <a class="bouton principal" href="https://demo-selection-voyage.onrender.com" target="_blank" rel="noopener">▶ Ouvrir la démo</a>
+      <a class="bouton second" href="https://github.com/Potatoesfra/demo_selection_voyage" target="_blank" rel="noopener">Code source sur GitHub</a>
+      <span class="etat-demo" id="etatDemo" role="status" aria-live="polite"><i></i><span>Réveil du serveur de démo…</span></span>
+    </div>
+    <div class="capture-principale">
+      <img src="apercus/propositions.jpg" width="880" height="550"
+           alt="Vue des propositions : cartes de destinations avec photos, prix par personne, avantages et inconvénients, votes et boutons Liker et NON">
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="conteneur" aria-labelledby="t-fonctions">
+    <h2 id="t-fonctions">Ce que fait l'application</h2>
+    <p class="sous">Un outil de décision de groupe complet, de la saisie des options jusqu'au verdict.</p>
+    <div class="grille">
+      <article class="pilier">
+        <h3><span aria-hidden="true">🙋</span>Entrée sans compte</h3>
+        <p>On choisit son prénom et un emoji, c'est tout. Un <b>cookie de reconnexion</b> (30 jours) évite de se
+          réidentifier, et la saisie d'un nom <b>détecte les profils similaires</b> pour éviter les doublons.</p>
+      </article>
+      <article class="pilier">
+        <h3><span aria-hidden="true">❤️</span>Votes multiples</h3>
+        <p>Chacun peut aimer autant de propositions qu'il veut ; les barres de progression et les avatars des votants
+          montrent d'un coup d'œil ce qui fait consensus.</p>
+      </article>
+      <article class="pilier">
+        <h3><span aria-hidden="true">💀</span>Droit de véto</h3>
+        <p>Un seul <b>NON</b> par personne, sur toute la durée du vote : il signifie « si c'est ça, je ne viens pas ».
+          Il se déplace ou se retire, et une confirmation évite les clics accidentels.</p>
+      </article>
+      <article class="pilier">
+        <h3><span aria-hidden="true">🗺️</span>Carte et temps de trajet</h3>
+        <p>Adresses <b>géocodées</b> (Nominatim), propositions placées sur une carte Leaflet, temps de trajet en voiture
+          calculés par <b>OSRM</b> depuis Paris, Marseille, Bordeaux et Toulouse, et gare la plus proche.</p>
+      </article>
+      <article class="pilier">
+        <h3><span aria-hidden="true">📊</span>Résultats en temps réel</h3>
+        <p>Classement rafraîchi automatiquement toutes les 5 secondes : chaque vote ou véto apparaît chez
+          tout le monde sans recharger la page.</p>
+      </article>
+      <article class="pilier">
+        <h3><span aria-hidden="true">🛠️</span>Tableau de bord admin</h3>
+        <p>Création du voyage, gestion des participants, ajout et édition des propositions (galerie photo, prix par
+          personne, pour et contre, lien vers l'annonce, couleur et icône), réinitialisation complète.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="conteneur" aria-labelledby="t-deroule">
+    <h2 id="t-deroule">Comment ça se passe</h2>
+    <p class="sous">Trois rôles, un seul lien à partager.</p>
+    <ol class="etapes">
+      <li><b>L'organisateur prépare</b>Il crée le voyage depuis l'espace admin, ajoute les participants et les
+        logements envisagés ; les temps de trajet se calculent au géocodage de l'adresse.</li>
+      <li><b>Le groupe vote</b>Chacun ouvre le lien, choisit son profil, aime les options qui lui plaisent et garde
+        son véto pour celle qu'il refuse.</li>
+      <li><b>Tout le monde voit le verdict</b>L'onglet Résultats classe les propositions en direct, avec qui a voté
+        pour quoi et qui a posé un NON.</li>
+    </ol>
+  </section>
+
+  <section class="conteneur" aria-labelledby="t-ecrans">
+    <h2 id="t-ecrans">Les écrans</h2>
+    <p class="sous">Cliquez une capture pour l'agrandir. Captures réalisées sur un voyage fictif.</p>
+    <div class="galerie">
+      <figure>
+        <a href="apercus/accueil.jpg" target="_blank" rel="noopener"><img src="apercus/accueil.jpg" width="880" height="550" loading="lazy" alt="Écran d'accueil : choix du profil parmi six participants représentés par un emoji"></a>
+        <figcaption><b>Accueil</b>Choisir son profil existant ou en créer un nouveau, avec son emoji.</figcaption>
+      </figure>
+      <figure>
+        <a href="apercus/veto.jpg" target="_blank" rel="noopener"><img src="apercus/veto.jpg" width="880" height="550" loading="lazy" alt="Fenêtre de confirmation du droit de véto"></a>
+        <figcaption><b>Droit de véto</b>Confirmation avant de poser son unique NON.</figcaption>
+      </figure>
+      <figure>
+        <a href="apercus/trajets.jpg" target="_blank" rel="noopener"><img src="apercus/trajets.jpg" width="880" height="550" loading="lazy" alt="Temps de trajet en voiture depuis quatre villes et gare la plus proche"></a>
+        <figcaption><b>Temps de trajet</b>Durée en voiture depuis quatre villes et gare la plus proche.</figcaption>
+      </figure>
+      <figure>
+        <a href="apercus/resultats.jpg" target="_blank" rel="noopener"><img src="apercus/resultats.jpg" width="880" height="550" loading="lazy" alt="Classement des propositions avec barres de votes, votants et vétos"></a>
+        <figcaption><b>Résultats en direct</b>Classement, votants et vétos, rafraîchis toutes les 5 secondes.</figcaption>
+      </figure>
+      <figure>
+        <a href="apercus/carte.jpg" target="_blank" rel="noopener"><img src="apercus/carte.jpg" width="880" height="550" loading="lazy" alt="Carte du sud-ouest de la France avec quatre marqueurs de propositions"></a>
+        <figcaption><b>Carte</b>Propositions géolocalisées sur OpenStreetMap, colorées comme leur carte.</figcaption>
+      </figure>
+      <figure>
+        <a href="apercus/admin.jpg" target="_blank" rel="noopener"><img src="apercus/admin.jpg" width="880" height="550" loading="lazy" alt="Tableau de bord administrateur : formulaire de proposition et liste des participants"></a>
+        <figcaption><b>Espace admin</b>Voyage, propositions et participants, protégés par mot de passe.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="conteneur" aria-labelledby="t-tech">
+    <div class="deux-col">
+      <div>
+        <h2 id="t-tech">Sous le capot</h2>
+        <p class="sous">Une application Flask classique, pensée pour un hébergement gratuit.</p>
+        <div class="tableau-defile">
+          <table>
+            <thead><tr><th>Brique</th><th>Rôle</th></tr></thead>
+            <tbody>
+              <tr><td>Flask + Jinja</td><td>routes, rendu des pages, API JSON des résultats et de la carte</td></tr>
+              <tr><td>SQLAlchemy + PostgreSQL</td><td>voyage, propositions, participants, votes et vétos (contraintes d'unicité)</td></tr>
+              <tr><td>Nominatim (OpenStreetMap)</td><td>géocodage des adresses, recherche de la gare la plus proche</td></tr>
+              <tr><td>OSRM</td><td>temps de trajet routier depuis les villes de départ</td></tr>
+              <tr><td>Leaflet</td><td>carte interactive des propositions</td></tr>
+              <tr><td>Gunicorn sur Render</td><td>déploiement, configuration par variables d'environnement</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2>Technologies</h2>
+        <p class="sous">Python côté serveur, JavaScript sans framework côté client.</p>
+        <ul class="puces">
+          <li>Python</li><li>Flask</li><li>Jinja</li><li>SQLAlchemy</li><li>PostgreSQL</li><li>Gunicorn</li>
+          <li>JavaScript</li><li>Tailwind CSS</li><li>Leaflet</li><li>OpenStreetMap</li><li>Nominatim</li>
+          <li>OSRM</li><li>Render</li>
+        </ul>
+        <p class="encart" style="margin-top:22px"><b>Choix d'ingénierie —</b> base PostgreSQL externe pour survivre au
+          disque éphémère de Render ; secrets (clé de session, mot de passe admin) uniquement en variables
+          d'environnement ; cookies <code>SameSite=None; Secure</code> pour que la session tienne quand la démo est
+          intégrée dans une autre page (iframe).</p>
+        <p class="encart violet" style="margin-top:14px"><b>Démo partagée —</b> la démo publique est commune à tous
+          les visiteurs : les profils et les votes des autres y apparaissent. L'espace admin est réservé.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="conteneur" lang="en" aria-labelledby="t-en">
+    <h2 id="t-en">In English</h2>
+    <p class="sous" style="max-width:80ch">TripVote is a collaborative web app for a group of friends choosing where
+      to spend a weekend. An organiser adds the candidate places (photos, price per person, pros and cons, address);
+      participants join without an account, like as many options as they want and hold a single veto. Addresses are
+      geocoded with Nominatim, driving times from four French cities are computed with OSRM, options are shown on a
+      Leaflet map, and results refresh live every five seconds. Built with Flask, SQLAlchemy and PostgreSQL, deployed
+      on Render. The user interface is in French.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="conteneur">
+    <span>© 2026 Lucas Adam · projet personnel</span>
+    <span>La démo gratuite peut mettre 30 à 60 s à démarrer.</span>
+    <p class="credits-pied">Captures : photos Wikimedia Commons (licences libres, via Wikipédia) ; fond de carte
+      © contributeurs OpenStreetMap ; temps de trajet OSRM.</p>
+  </div>
+</footer>
+
+<script>
+  // Démo Render gratuite : le serveur dort après 15 min d'inactivité. Une requête
+  // le réveille pendant que le visiteur lit cette page ; la réponse (opaque, en
+  // mode no-cors) n'arrive qu'une fois le serveur démarré.
+  const DEMO = "https://demo-selection-voyage.onrender.com";
+  const etat = document.getElementById("etatDemo");
+  const texte = etat.querySelector("span");
+  let pret = false;
+  async function reveiller(essai = 1) {
+    try {
+      await fetch(`${DEMO}/api/results?reveil=${Date.now()}`, { mode: "no-cors", cache: "no-store" });
+      pret = true;
+      etat.className = "etat-demo pret";
+      texte.textContent = "Démo prête";
+    } catch (e) {
+      if (essai < 6) setTimeout(() => reveiller(essai + 1), 10000);
+      else { etat.className = "etat-demo erreur"; texte.textContent = "Démo injoignable pour l'instant"; }
+    }
+  }
+  reveiller();
+  setTimeout(() => { if (!pret && !etat.classList.contains("erreur")) texte.textContent = "Réveil du serveur… (jusqu'à une minute)"; }, 6000);
+</script>
+</body>
+</html>
